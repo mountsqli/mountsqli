@@ -19,7 +19,7 @@ export default defineConfig({
 			sidebar,
 			expressiveCode: { themes: ['github-dark-dimmed', 'github-light'] },
 			editLink: {
-				baseUrl: 'https://github.com/mountsqli/mountsqli/edit/main/',
+				baseUrl: 'https://github.com/mountsqli/mountsqli/edit/main/docs',
 			},
 		}),
 		mermaid({
