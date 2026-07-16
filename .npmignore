@@ -1,13 +1,31 @@
 # Only dist/ is published per-package (see files[] in each package.json).
 # This root-level npmignore is a safety net if any package lacks files[].
 
-node_modules
-src
-test
-tests
+# Source code — don't publish
+packages/*/src/
+packages/*/tsconfig.json
+packages/*/tsup.config.ts
+packages/*/node_modules/
+examples/
+docs/
+node_modules/
+.claude/
 *.test.ts
 *.spec.ts
+*.test.js
+*.spec.js
+tsconfig.base.json
+vitest.config.ts
+eslint.config.js
+.prettierrc
+pnpm-workspace.yaml
+pnpm-lock.yaml
+.git/
 .gitignore
-*.md
-!README.md
+CLAUDE.md
+README.md
 LICENSE
+
+# Keep only dist/ in each package
+!packages/*/dist/
+!packages/*/package.json

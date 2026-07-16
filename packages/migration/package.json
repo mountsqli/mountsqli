@@ -1,6 +1,6 @@
 {
   "name": "@mountsqli/migration",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "type": "module",
   "description": "MountSQLI migration engine: diff, generate SQL, introspect, apply/rollback",
   "main": "./dist/index.js",
@@ -32,6 +32,26 @@
     "@types/node": "^22.0.0",
     "@mountsqli/driver-sqlite": "workspace:*"
   },
+  "keywords": [
+    "mountsqli",
+    "sql",
+    "orm",
+    "typescript",
+    "type-safe",
+    "sqlite",
+    "postgres",
+    "mysql",
+    "database"
+  ],
+  "homepage": "https://github.com/mountsqli/mountsqli#readme",
+  "bugs": {
+    "url": "https://github.com/mountsqli/mountsqli/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mountsqli/mountsqli.git"
+  },
+  "author": "shekhsahebali",
   "license": "MIT",
   "engines": {
     "node": ">=22.5"

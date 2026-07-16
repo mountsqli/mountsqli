@@ -1,6 +1,6 @@
 {
   "name": "@mountsqli/api",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "type": "module",
   "description": "MountSQLI API engine: OpenAPI + REST handlers + tRPC from named QueryPlans",
   "main": "./dist/index.js",
@@ -30,6 +30,26 @@
     "vitest": "^3.0.0",
     "@types/node": "^22.0.0"
   },
+  "keywords": [
+    "mountsqli",
+    "sql",
+    "orm",
+    "typescript",
+    "type-safe",
+    "sqlite",
+    "postgres",
+    "mysql",
+    "database"
+  ],
+  "homepage": "https://github.com/mountsqli/mountsqli#readme",
+  "bugs": {
+    "url": "https://github.com/mountsqli/mountsqli/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mountsqli/mountsqli.git"
+  },
+  "author": "shekhsahebali",
   "license": "MIT",
   "engines": {
     "node": ">=22.5"

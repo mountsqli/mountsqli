@@ -1,8 +1,8 @@
 {
   "name": "mountsqli",
-  "version": "0.6.0",
+  "version": "0.0.0",
+  "private": true,
   "description": "MountSQLI — next-generation type-safe SQL engine & backend platform (monorepo root)",
-  "main": "index.js",
   "type": "module",
   "scripts": {
     "build": "pnpm -r build",
@@ -19,7 +19,7 @@
     "postgres",
     "mysql"
   ],
-  "homepage": "https://mountsqli.dev",
+  "homepage": "https://mountsqli.vercel.app",
   "bugs": { "url": "https://github.com/mountsqli/mountsqli/issues" },
   "repository": {
     "type": "git",
@@ -31,6 +31,5 @@
     "@types/node": "^22.0.0",
     "vitest": "^3.0.0"
   },
-  "private": true,
   "packageManager": "pnpm@11.11.0"
 }
