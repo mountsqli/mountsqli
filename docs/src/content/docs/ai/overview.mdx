@@ -1,0 +1,55 @@
+---
+title: AI Overview
+description: Natural language to SQL, plan explanation, optimization, and review — all through the compiler.
+---
+
+`@mountsqli/ai` is **AI native by design**: generated queries go through the same
+compiler validator as hand-written ones. There is no separate, unsafe SQL
+generator.
+
+## Capabilities
+
+| Function | What it does |
+| --- | --- |
+| `nlToSql` | natural language → `QueryPlan` (not raw SQL) |
+| `explainPlan` | human-readable explanation of a plan |
+| `optimizePlan` | suggests optimizations for a plan |
+| `reviewPlans` | security/perf findings across plans |
+
+## The ModelProvider seam
+
+The only external dependency is `ModelProvider` — an interface you implement
+(OpenAI, Anthropic, a local model, or a test fake). The package never calls a
+vendor SDK directly.
+
+```ts
+import { Ai } from "@mountsqli/ai";
+
+const ai = new Ai({ provider: myProvider });
+const result = await ai.nlToSql("users over 18", [users.def]);
+// result.plan is a QueryPlan — compiled & type-checked like any other
+```
+
+## Why plans, not strings?
+
+Because the model emits a `QueryPlan`, the result is:
+
+- **Type-checked** against your schema.
+- **Injection-safe** — values are parameters, never concatenated.
+- **Explainable** — `explainPlan` can describe it.
+
+## Best practices
+
+- Validate the returned plan (compile it) before running, like any query.
+- Swap `ModelProvider` per environment (fake in tests).
+- Use `reviewPlans` in CI to catch risky generated queries.
+
+## Common mistakes
+
+- Treating model output as trusted SQL — still compile the plan.
+- Hard-coding a vendor SDK in app code (use `ModelProvider`).
+
+## Related
+
+- [Natural Language → SQL](/ai/nl-to-sql/) — `nlToSql` in depth.
+- [Explain / Optimize / Review](/ai/assist/) — the advisors.

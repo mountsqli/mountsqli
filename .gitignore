@@ -1,0 +1,24 @@
+# dependencies
+node_modules/
+
+# build output (each package emits its own dist/)
+dist/
+*.tsbuildinfo
+
+# local dbs
+*.db
+*.db-shm
+*.db-wal
+_mount_migrations*
+
+# editor / os
+.DS_Store
+*.log
+.idea/
+.vscode/
+
+# coverage
+coverage/
+
+.claude/
+CLAUDE.md

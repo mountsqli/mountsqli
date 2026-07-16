@@ -1,0 +1,64 @@
+---
+title: Versioning
+description: Content-addressed object versions in MountSQLI storage.
+---
+import { Aside } from '@astrojs/starlight/components';
+
+
+MountSQLI storage supports **content-addressed versioning**: each revision of an
+object is addressed by a hash of its content, so identical bytes are stored once.
+
+## How it works
+
+```mermaid
+flowchart LR
+  A[put(key, bytes)] --> B[hash(bytes)]
+  B --> C[store at content address]
+  C --> D[record version -> key]
+```
+
+When you `put` the same bytes again, the content address is identical — the
+storage deduplicates, and a new version pointer is recorded.
+
+## Put a new version
+
+```ts
+await storage.put("report.pdf", buffer);
+// later
+await storage.put("report.pdf", updatedBuffer); // new version, old retained
+```
+
+## Read a version
+
+```ts
+const current = await storage.get("report.pdf");
+const older = await storage.get("report.pdf", { version: "v2" });
+```
+
+## Benefits
+
+- **Deduplication** — identical content stored once.
+- **History** — prior versions remain readable.
+- **Integrity** — the content hash is the address, so corruption is detectable.
+
+<Aside type="note" title="listSecure is O(N)">
+Per-object secure listing iterates objects to check ACLs, so it is O(N) per
+object. Fine for small buckets; at scale you'd index ACLs. This is a known,
+documented limitation (audit #12).
+</Aside>
+
+## Best practices
+
+- Use versioning for user-uploaded, mutable files.
+- Prune old versions on a schedule if storage grows.
+- Combine with signed URLs for safe sharing of a specific version.
+
+## Common mistakes
+
+- Assuming `get` returns the latest when you meant a pinned version.
+- Never pruning versions — storage grows unbounded.
+
+## Related
+
+- [Signed URLs](/storage/signed-urls/) — share a version safely.
+- [Overview](/storage/overview/) — the `ObjectAcl` model.

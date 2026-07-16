@@ -1,0 +1,69 @@
+---
+title: Sessions
+description: Issue and verify sessions with the Auth facade and a pluggable TokenStore.
+---
+import { Aside } from '@astrojs/starlight/components';
+
+
+The `Auth` facade issues JWTs and persists sessions through a `TokenStore`. It
+is storage-agnostic — it depends only on a small `TokenStore` interface.
+
+## Create the facade
+
+```ts
+import { Auth, MemoryTokenStore } from "@mountsqli/auth";
+
+const auth = new Auth({ jwtKey: "secret", store: new MemoryTokenStore() });
+```
+
+## Login / authenticate / logout
+
+```ts
+const { token } = await auth.login({ userId: 1, roles: ["user"], claims: { tenantId: 2 } });
+
+const r = await auth.authenticate(token);
+// r.ok === true, r.user.userId === "1"
+
+await auth.logout(token);
+// authenticate(token) now returns { ok: false }
+```
+
+## TokenStore implementations
+
+| Store | Survives restart? | Cross-instance? | Use |
+| --- | --- | --- | --- |
+| `MemoryTokenStore` | no | no | tests, single process |
+| `SqliteTokenStore` | yes | no | simple file-backed |
+| `PgTokenStore` | yes | yes | production (Postgres) |
+
+<Aside type="caution" title="Production sessions">
+The default `MemoryTokenStore` loses sessions on restart and isn't shared across
+instances. For production, use `PgTokenStore` (via `createPgAdapter`) or a shared
+store. See audit item #13.
+</Aside>
+
+## AuthConfig
+
+| Field | Effect |
+| --- | --- |
+| `jwtKey` | HS256 secret or EdDSA private key PEM |
+| `jwtAlg` | `"HS256"` (default) or `"EdDSA"` |
+| `sessionTtlSec` | session lifetime (default 3600) |
+| `store` | a `TokenStore` (defaults to in-memory) |
+| `rateLimit` | opt-in brute-force config |
+| `rateLimiter` | inject a shared `RateLimiter` (takes precedence) |
+
+## Best practices
+
+- Inject a shared `TokenStore` (Pg/Redis) in multi-instance deployments.
+- Keep sessions stateless (JWT) when you don't need server-side revocation.
+
+## Common mistakes
+
+- Using `MemoryTokenStore` in production — sessions vanish on restart.
+- Storing the JWT secret in code — load it from env.
+
+## Related
+
+- [Passwords & JWT](/auth/passwords-jwt/) — the crypto underneath.
+- [Rate Limiting](/auth/rate-limiting/) — protect login.

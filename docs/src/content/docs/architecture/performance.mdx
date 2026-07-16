@@ -1,0 +1,56 @@
+---
+title: Performance
+description: Why MountSQLI is fast — immutability, no object graph, tree-shaking, and bound params.
+---
+
+MountSQLI is built to be small and fast where Prisma/Drizzle/TypeORM cannot be.
+
+## What makes it fast
+
+| Design choice | Effect |
+| --- | --- |
+| Plan is data, not objects | no per-row object graph on the read path |
+| Immutable builders | structural sharing, cheap forks |
+| Compile-leaning | tree-shake to the features you use |
+| Bound parameters | no SQL re-parsing from concatenated values |
+| Driver decodes types | one pass from rows to typed objects |
+
+## Allocation
+
+Because a `QueryPlan` is a plain struct and the builder forks rather than mutates,
+a hot query path allocates little. This matters on edge runtimes with tight
+allocation budgets.
+
+## Bundle size
+
+`mountsqli` re-exports a minimal, tree-shakeable surface. Heavy subsystems
+(auth, realtime, storage, cache, ai) are separate packages — import only what you
+use, and the rest is dropped from the bundle.
+
+## Database-side
+
+- Use indexes on filtered/joined columns (`mountsqli analyze` suggests them).
+- Prefer multi-row `insert([...])` over N single inserts.
+- Paginate with `orderBy` + `limit`/`offset` (or `paginate`).
+
+## Measuring
+
+- `QueryCacheAnalyzer` tells you what's cacheable.
+- `optimizePlan` (ai) and `mountsqli analyze` flag full scans.
+- The Studio Cache view shows hit/miss rates.
+
+## Best practices
+
+- Let the compiler parameterize; never inline values.
+- Cache read-heavy endpoints via the bridge.
+- Watch the Cache Inspector in Studio to confirm hit rate.
+
+## Common mistakes
+
+- N+1 inserts instead of one multi-row insert.
+- Filtering in app code instead of `where()` (more rows over the wire).
+
+## Related
+
+- [Caching Layer](/architecture/caching/) — cut DB load.
+- [Compiler & Dialects](/architecture/compiler/) — bound params.

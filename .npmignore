@@ -1,0 +1,13 @@
+# Only dist/ is published per-package (see files[] in each package.json).
+# This root-level npmignore is a safety net if any package lacks files[].
+
+node_modules
+src
+test
+tests
+*.test.ts
+*.spec.ts
+.gitignore
+*.md
+!README.md
+LICENSE

@@ -1,0 +1,60 @@
+---
+title: Introspect
+description: Reverse-engineer TableDefs from a live database with the introspect API.
+---
+
+`introspect(driver)` reads a live database and returns its schema as `TableDef[]`
+— the same shape your code defines. This powers drift detection and the Studio
+ERD.
+
+## API
+
+```ts
+import { introspectorFor } from "@mountsqli/migration";
+
+const introspect = introspectorFor("postgres");
+const defs: TableDef[] = await introspect(driver);
+```
+
+## How it is used
+
+| Consumer | Purpose |
+| --- | --- |
+| `migrate generate` | compares live schema to code to compute the diff |
+| `migrate status` | detects drift (applied file missing / schema mismatch) |
+| Studio ERD | draws tables and relationships |
+| `mountsqli analyze` | reports schema vs live drift |
+
+## Dialect support
+
+`introspectorFor(dialect)` returns the right introspector:
+
+- `sqlite` — reads `sqlite_master` + `PRAGMA table_info`.
+- `postgres` — reads `information_schema`.
+- `mysql` — reads `information_schema`.
+
+## Real-world example
+
+Catch drift in a script:
+
+```ts
+const live = await introspectorFor("postgres").introspect(driver);
+const code = tablesOf(...myTables);
+const diff = diffSchemas(live, code); // code as "after"
+if (diff.changes.length) console.warn("Schema drift detected");
+```
+
+## Best practices
+
+- Introspect in a read-only or low-traffic context.
+- Use the result to *report* drift; fix it with a generated migration.
+
+## Common mistakes
+
+- Treating introspected defs as the source of truth — code is.
+- Introspecting `:memory:` to compare against real schemas.
+
+## Related
+
+- [How Migrations Work](/migrations/how/) — diff model.
+- [DDL Generation](/schema/ddl/) — the forward direction.

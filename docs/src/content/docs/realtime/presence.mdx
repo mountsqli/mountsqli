@@ -1,0 +1,61 @@
+---
+title: Presence
+description: Track who is in a room with PresenceChannel and the Hub.
+---
+
+`PresenceChannel` tracks members (users) in a named room. It's built for
+"who's online" features without polling.
+
+## Open a presence room
+
+```ts
+import { Hub } from "@mountsqli/realtime";
+
+const hub = new Hub();
+const room = hub.presence("project-7");
+
+room.join({ id: "u1", meta: { name: "Ada" } });
+room.join({ id: "u2", meta: { name: "Lin" } });
+
+room.members(); // [{ id: "u1", ... }, { id: "u2", ... }]
+```
+
+## React to changes
+
+```ts
+room.onChange((members) => {
+  console.log("now online:", members.map((m) => m.id));
+});
+
+room.leave("u1"); // fires onChange
+```
+
+## Presence shape
+
+```ts
+type Presence = { id: string; meta?: Record<string, unknown> };
+```
+
+## Real-world example
+
+Wire it to SSE in the dev server so a browser sees live presence:
+
+```ts
+// client subscribes to /live/project-7 (SSE); server publishes presence diffs
+```
+
+## Best practices
+
+- Key members by a stable user id, not a connection id.
+- Always `leave` on disconnect to avoid ghost members.
+- Store lightweight `meta` (name, avatar) — not secrets.
+
+## Common mistakes
+
+- Never calling `leave` — members linger after disconnect.
+- Putting sensitive data in `meta`.
+
+## Related
+
+- [Overview](/realtime/overview/) — the `Hub` model.
+- [Live Queries](/realtime/live-queries/) — reactive data alongside presence.

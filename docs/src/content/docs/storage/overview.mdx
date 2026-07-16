@@ -1,0 +1,45 @@
+---
+title: Storage Overview
+description: Store and serve files with signed URLs, versioning, and an S3 adapter.
+---
+
+`@mountsqli/storage` is a storage layer for objects (files, blobs). It supports
+HMAC-signed URLs, content-addressed versioning, and an S3 adapter.
+
+## Core concepts
+
+| Concept | What it is |
+| --- | --- |
+| `StorageAdapter` | interface for put/get/delete/list |
+| Signed URL | HMAC-signed, time-limited GET URL |
+| Versioning | content-addressed revisions of an object |
+| `ObjectAcl` | access control reused from the policy engine |
+
+## Why signed URLs?
+
+A signed URL lets you grant temporary, revocable read access without exposing
+your storage credentials or a long-lived token. The signature is verified
+**timing-safe** (`timingSafeEqual`) so it can't be forged byte-by-byte.
+
+## RLS reuse
+
+Storage reuses the auth policy engine: `compilePolicy(policy, ctx)` returns the
+same `FilterNode[]` shape the query builder uses, so object access follows the
+same RLS rules as row access.
+
+## Best practices
+
+- Use signed URLs for client-side downloads; never hand out raw credentials.
+- Set short expiries on signed URLs.
+- Apply an `ObjectAcl` to scope who can read/write.
+
+## Common mistakes
+
+- Treating signed URLs as permanent — they expire.
+- Storing secrets in the URL (only the HMAC signature belongs there).
+
+## Related
+
+- [Signed URLs](/storage/signed-urls/) — generate and verify.
+- [Versioning](/storage/versioning/) — content-addressed revisions.
+- [S3 Adapter](/storage/s3/) — plug into S3-compatible storage.

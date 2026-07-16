@@ -1,0 +1,81 @@
+---
+title: REST Handler
+description: Serve your Router over HTTP with createRestHandler — async, auth-awaited, 403 on failure.
+---
+import { Aside } from '@astrojs/starlight/components';
+
+
+`createRestHandler(router)` returns an HTTP handler. It matches a request to a
+route, runs its auth middleware, and returns the route's `QueryPlan` plus parsed
+params — or a `RestResponse` (e.g. `403`) if auth fails.
+
+## Usage
+
+```ts
+import { createRouter, createRestHandler, crudRoutes } from "@mountsqli/api";
+import { users } from "./tables";
+
+const router = createRouter();
+router.use(crudRoutes(users.def));
+
+const handle = createRestHandler(router);
+
+// inside your server:
+const out = await handle(restReq); // MUST be awaited
+if ("status" in out) {
+  return res.status(out.status).json(out.body); // e.g. 403
+}
+// out.route / out.plan / out.params
+```
+
+## CRUD routes
+
+`crudRoutes(tableDef)` wires the standard endpoints:
+
+| Method | Path | Action |
+| --- | --- | --- |
+| GET | `/<table>` | list (with filter + pagination) |
+| POST | `/<table>` | create |
+| GET | `/<table>/:id` | one |
+| PUT | `/<table>/:id` | update |
+| DELETE | `/<table>/:id` | delete |
+
+## Filtering & pagination
+
+`parseFilterQuery` and `paginationMeta` turn query strings into plan filters:
+
+```ts
+const filter = parseFilterQuery(req.query, ["age", "email"]);
+const meta = paginationMeta(req.query, total);
+```
+
+## Auth (awaited)
+
+A route's `auth` middleware is **awaited**. On rejection, the handler returns
+`{ status: 403, body: { error: "Forbidden" } }`. Do not fire-and-forget it.
+
+<Aside type="danger" title="Await the handler">
+`createRestHandler` is async. If you call it without `await`, the auth check
+resolves after the response is sent — a security bypass. Always `await`.
+</Aside>
+
+## Errors
+
+External errors become `ProblemDetail` via `mountErrorToProblem`. Raw detail
+stays out of the user-facing message.
+
+## Best practices
+
+- Use `crudRoutes` for standard tables; add custom routes for business logic.
+- Always `await handle(...)`.
+- Return `out.body` with `out.status` for non-query results.
+
+## Common mistakes
+
+- Forgetting `await` — auth bypass.
+- Putting raw SQL in handlers instead of a `QueryPlan`.
+
+## Related
+
+- [Auth Middleware](/api/auth-middleware/) — the awaited guard.
+- [OpenAPI & Codegen](/api/openapi/) — generate the spec from the router.

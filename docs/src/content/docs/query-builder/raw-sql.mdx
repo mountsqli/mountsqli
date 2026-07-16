@@ -1,0 +1,109 @@
+---
+title: Raw SQL & RLS Gate
+description: Use selectExpr/whereExpr escape hatches safely, and the RLS enforcement gate (.unsafe, withFilters).
+---
+import { Aside } from '@astrojs/starlight/components';
+
+
+When the builder can't express what you need, `selectExpr` and `whereExpr` let
+you drop to raw SQL. These hatches are **guarded** against injection.
+
+## selectExpr
+
+Add a raw expression to the SELECT list:
+
+```ts
+const rows = await db
+  .from(users)
+  .selectExpr("COUNT(*)", [], "cnt")
+  .selectExpr("MAX(age)", [], "max_age")
+  .select();
+```
+
+The third argument is the output alias.
+
+## whereExpr
+
+Add a raw fragment to the WHERE clause. Bind values as params — never
+interpolate them:
+
+```ts
+const rows = await db
+  .from(users)
+  .whereExpr("EXISTS (SELECT 1 FROM posts WHERE posts.user_id = users.id)")
+  .select();
+```
+
+## The guard
+
+`selectExpr` / `whereExpr` reject any expression containing `;`, `--`, or `/*`
+at build time. Those are the patterns that enable SQL injection (statement
+termination, line comment, block comment). A rejected expression throws
+`MountError("VALIDATION", ...)`.
+
+<Aside type="danger" title="Never interpolate untrusted input">
+The guard blocks multi-statement and comment attacks. It does **not** sanitize
+column names. Always bind values as parameters; only use raw SQL for trusted
+SQL fragments.
+</Aside>
+
+## RLS enforcement gate
+
+When a `Driver` is in `enforceRls` mode with a registry protecting a table, the
+builder **throws** `MountError("FORBIDDEN")` if you query that table without
+applying a policy.
+
+### Apply a policy
+
+```ts
+import { applyPolicy, allowOwner } from "@mountsqli/auth";
+
+const scoped = applyPolicy(db.from(files), allowOwner("ownerId"), { userId });
+await scoped.select(); // safe — policy injected as WHERE
+```
+
+### Opt out with .unsafe()
+
+`.unsafe()` tells the gate you accept the risk:
+
+```ts
+await db.from(files).unsafe().select(); // bypasses RLS enforcement
+```
+
+### Inject filters directly
+
+`withFilters(FilterNode[])` injects compiled policy filters without going
+through `applyPolicy`:
+
+```ts
+const scoped = db.from(files).withFilters(applyPolicy(policy, ctx));
+```
+
+## Real-world example
+
+A guarded report query with a raw aggregate, under RLS:
+
+```ts
+export async function userReport(userId: string) {
+  return applyPolicy(db.from(files), allowOwner("ownerId"), { userId })
+    .selectExpr("COUNT(*)", [], "fileCount")
+    .select();
+}
+```
+
+## Best practices
+
+- Prefer builder methods; use raw SQL only when necessary.
+- Bind every dynamic value as a param in `whereExpr`.
+- Apply RLS policies at the edge, not per handler.
+
+## Common mistakes
+
+- Putting `;` in a raw expression — the guard rejects it.
+- Querying a protected table in enforce mode without `applyPolicy` or `.unsafe()`.
+
+## Related
+
+- [Filtering](/query-builder/filtering/) — prefer `where()` over `whereExpr`.
+- [RLS Policy DSL](/auth/rls/) — build the policies injected here.
+- [Error Handling](/operations/error-handling/) — `MountError` codes.

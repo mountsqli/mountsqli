@@ -1,0 +1,49 @@
+---
+title: Tags & Invalidation
+description: Invalidate cached queries by table tag so writes stay consistent.
+---
+
+Tag-based invalidation keeps the cache correct without manual key bookkeeping.
+The `CacheBridge` tags each cached query by the tables it touches.
+
+## Automatic tagging
+
+```ts
+const { rows } = await bridge.query(db, plan); // tagged with plan's tables
+```
+
+When you write, the bridge invalidates every cache entry tagged with the
+affected table:
+
+```ts
+await db.from(orders).insert({ /* ... */ });
+await bridge.invalidateAfterWrite(ordersPlan); // drops orders-tagged caches
+```
+
+## Manual invalidation
+
+```ts
+await bridge.invalidateTag("orders");      // one tag
+await bridge.invalidateTags(["orders", "users"]); // several
+```
+
+## Why tags?
+
+A single write (e.g. `orders`) can stale many cached queries. Tags let one
+invalidation clear them all, keyed by table name — no per-query bookkeeping.
+
+## Best practices
+
+- Let `invalidateAfterWrite` run after every write path.
+- Invalidate by table, not by guessing cache keys.
+- Use L2 (Redis) tags so all instances see the invalidation.
+
+## Common mistakes
+
+- Forgetting `invalidateAfterWrite` — serves stale data.
+- Manual key invalidation that misses some queries.
+
+## Related
+
+- [Overview](/cache/overview/) — the `CacheBridge`.
+- [Analyzer](/cache/analyzer/) — what's cacheable.

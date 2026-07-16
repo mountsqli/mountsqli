@@ -1,0 +1,57 @@
+---
+title: mountsqli analyze
+description: Run a health report — schema drift, index suggestions, and plan warnings.
+---
+
+`mountsqli analyze` compares your code-defined schema against the live database
+and reports actionable health information. Run it in CI or before a release.
+
+## Run it
+
+```bash
+mountsqli analyze
+```
+
+## What the report covers
+
+| Section | What it checks |
+| --- | --- |
+| **Drift** | code schema vs live DB (`introspect` diff) |
+| **Index suggestions** | columns used in filters/joins without an index |
+| **Plan warnings** | queries that scan full tables or miss constraints |
+
+## Example output
+
+```text
+$ mountsqli analyze
+Drift:        none
+Indexes:      suggest INDEX on "orders"("customerId")
+Plans:        "users".where("email" = ?) — add UNIQUE on email
+```
+
+## How it works
+
+```mermaid
+flowchart LR
+  A[code TableDef[]] --> B[diffSchemas vs live]
+  C[live DB via introspect] --> B
+  B --> D[Drift report]
+  E[QueryPlans] --> F[suggestIndexes]
+  F --> G[Index suggestions]
+```
+
+## Best practices
+
+- Run `analyze` in CI to fail on drift before deploy.
+- Apply suggested indexes after confirming query patterns.
+- Re-run after schema changes to keep suggestions fresh.
+
+## Common mistakes
+
+- Ignoring drift warnings — they mean code and DB disagree.
+- Adding every suggested index blindly — measure first.
+
+## Related
+
+- [Migrations → Introspect](/migrations/introspect/) — the drift source.
+- [Migrations → Status](/migrations/status/) — applied vs pending.

@@ -1,0 +1,67 @@
+---
+title: Natural Language → SQL
+description: Turn a question into a type-checked QueryPlan with nlToSql.
+---
+
+`nlToSql` converts a natural-language question into a `QueryPlan` using your
+schema as context. The result is a plan — not a SQL string.
+
+## Basic usage
+
+```ts
+import { nlToSql, Ai } from "@mountsqli/ai";
+
+const ai = new Ai({ provider: myProvider });
+const result = await ai.nlToSql("users over 18 ordered by name", [users.def]);
+
+// result.plan is a QueryPlan you can compile and run
+const compiled = compilePlan(result.plan, "postgres");
+```
+
+## Schema context
+
+`nlToSql` builds a schema context from your `TableDef[]` so the model knows the
+columns and types:
+
+```ts
+import { schemaContext } from "@mountsqli/ai";
+
+const ctx = schemaContext([users.def, posts.def]); // string fed to the model
+```
+
+## The ModelProvider seam
+
+You supply the model. The package stays vendor-neutral:
+
+```ts
+interface ModelProvider {
+  complete(prompt: string): Promise<string>;
+}
+```
+
+Inject a fake in tests for determinism.
+
+## Result shape
+
+```ts
+interface NlResult {
+  plan: QueryPlan;     // the generated query
+  explanation?: string; // optional natural-language summary
+}
+```
+
+## Best practices
+
+- Pass the exact tables the question can touch — scope the model.
+- Compile the returned plan (and type-check) before executing.
+- Keep a fake `ModelProvider` in tests so `nlToSql` is deterministic.
+
+## Common mistakes
+
+- Running model output without compiling the plan.
+- Giving the model every table when the question is narrow (more drift risk).
+
+## Related
+
+- [Overview](/ai/overview/) — the AI architecture.
+- [Explain / Optimize / Review](/ai/assist/) — validate generated plans.

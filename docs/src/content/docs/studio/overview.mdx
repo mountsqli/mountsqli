@@ -1,0 +1,53 @@
+---
+title: Studio Overview
+description: The MountSQLI visual dashboard — merged into the dev server on one port.
+---
+
+MountSQLI Studio is a visual dashboard for your data, schema, and queries. It is
+**merged into `mountsqli dev`**, so one command gives you the API, storage,
+realtime, and the UI.
+
+## How to open it
+
+```bash
+mountsqli dev --port 3737
+```
+
+Then open `http://localhost:3737/`. The dashboard is a single-page app that
+talks to the engine only through `Db` / `Driver` / `QueryPlan`.
+
+## What's inside
+
+| View | Path | What it shows |
+| --- | --- | --- |
+| Data Browser | `/` | rows per table, edit inline |
+| SQL Console | `/` | run SQL through the driver |
+| ERD | `/` | live schema diagram |
+| Migrations | `/` | applied vs pending |
+| Cache | `/` | cache stats (if enabled) |
+
+The dashboard JSON lives under `/api/studio/*` (tables, query, erd, migrations,
+health).
+
+## Why merged?
+
+Keeping Studio in the dev server means:
+
+- One process, one port, zero extra config.
+- The UI uses the same compiled queries as your app — no second code path.
+- Production stays light: Studio is dev-only.
+
+## Best practices
+
+- Use Studio for exploration; keep schema changes in code + migrations.
+- Don't expose `dev`/Studio to the public internet.
+
+## Common mistakes
+
+- Expecting Studio in production — it is a dev tool.
+- Editing data in Studio and forgetting to capture it as a migration.
+
+## Related
+
+- [mountsqli dev](/cli/dev/) — the server that serves Studio.
+- [Data Browser](/studio/data-browser/) — browse and edit rows.

@@ -1,0 +1,72 @@
+---
+title: Insert
+description: Insert one or many rows, and read them back with returning().
+---
+import { Aside } from '@astrojs/starlight/components';
+
+
+`insert()` adds rows. Pass a single object or an array for multi-row insert.
+Both compile to a single bound-parameter statement.
+
+## Insert one row
+
+```ts
+await db.from(users).insert({ email: "ada@example.com", age: 36 });
+```
+
+## Insert many rows
+
+```ts
+await db.from(users).insert([
+  { email: "a@b.c", age: 20 },
+  { email: "c@d.e", age: 30 },
+]);
+```
+
+## Read back with returning()
+
+Chain `.returning(...)` to get the inserted row(s), including generated IDs:
+
+```ts
+const { rows } = await db.from(users).returning("id", "email").insert({
+  email: "ada@example.com",
+});
+// rows[0].id is the generated primary key
+```
+
+<Aside type="caution" title="returning() is immutable">
+`returning()` forks a new builder — it never mutates `this`. A regression test
+guards this (issue 001). Always use the returned builder.
+</Aside>
+
+## How it compiles
+
+```ts
+db.from(users).insert({ email: "a@b.c" });
+// → INSERT INTO "users" ("email") VALUES (?)
+```
+
+## Real-world example
+
+```ts
+export async function createUser(email: string, age: number) {
+  const { rows } = await db.from(users).returning("id").insert({ email, age });
+  return rows[0].id;
+}
+```
+
+## Best practices
+
+- Use multi-row insert for bulk loads — one statement, many params.
+- Use `returning("id")` when you need the generated key.
+- Let `InferTable` type the values you pass.
+
+## Common mistakes
+
+- Awaiting `insert` but ignoring the returned `rows` when you need the ID.
+- Hand-building a multi-row statement instead of passing an array.
+
+## Related
+
+- [Upsert](/query-builder/upsert/) — insert-or-update on conflict.
+- [Update](/query-builder/update/) — modify existing rows.

@@ -1,0 +1,71 @@
+---
+title: Glossary
+description: Definitions of the terms used throughout the MountSQLI docs.
+---
+
+A quick reference for MountSQLI terminology.
+
+## A
+
+- **API Reference** — the index of package entry points.
+- **Auth** — the `@mountsqli/auth` package (primitives + `MountAuth`).
+
+## B
+
+- **Builder** — the `QueryBuilder` that produces a `QueryPlan`. Immutable.
+
+## C
+
+- **CacheBridge** — sits between queries and the cache manager; handles reads/invalidation.
+- **ColumnBuilder** — phantom-typed factory for a column (`int()`, `text()`, …).
+- **Compiler** — turns a `QueryPlan` into `{ sql, params, columnTypes }`.
+- **Config** — `defineConfig({...})`; the source of truth for the `Db`.
+
+## D
+
+- **Dialect** — decides SQL dialect + parameter style (`?` vs `$N`).
+- **Driver** — translates compiled SQL + params into rows. Thin transport.
+
+## F
+
+- **FilterNode** — structured filter (`=`, `in`, `or`, `exists`, …). What RLS compiles to.
+
+## I
+
+- **InferTable** — derives the row type from a `Table`.
+- **IR (Intermediate Representation)** — see `QueryPlan`.
+- **Immutable** — builder methods fork a new plan; never mutate `this`.
+
+## M
+
+- **Migration** — a SQL step recorded in `_mount_migrations`.
+- **MockDriver** — in-memory driver for plan-level unit tests.
+- **MountError** — structured, user-facing error (`code` + sanitized `message`).
+
+## P
+
+- **Policy** — an RLS rule compiled into `FilterNode[]`.
+- **QueryPlan** — the data structure describing a query. The central contract.
+
+## R
+
+- **RLS (Row-Level Security)** — policies compiled into the plan as WHERE filters.
+- **RBAC** — role-based access control (`Rbac`).
+
+## S
+
+- **Schema** — your `defineTable` definitions.
+- **Studio** — the visual dashboard merged into `mountsqli dev`.
+
+## T
+
+- **TokenStore** — pluggable session storage (`Memory`/`Sqlite`/`Pg`).
+
+## Best practices
+
+- If a term is unfamiliar, find its page via the sidebar — most have a dedicated guide.
+
+## Related
+
+- [How MountSQLI Works](/architecture/how-it-works/) — the concepts in context.
+- [API Reference](/reference/api/) — where to import each piece.

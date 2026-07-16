@@ -1,0 +1,70 @@
+---
+title: Testing
+description: Unit-test with MockDriver and integration-test against real node:sqlite.
+---
+
+MountSQLI tests prefer the **real driver** for integration and `MockDriver` for
+plan-level unit tests.
+
+## Unit tests with MockDriver
+
+`MockDriver` returns canned rows and lets you assert on the compiled plan — no
+database needed:
+
+```ts
+import { MockDriver } from "@mountsqli/driver";
+import { tableQuery } from "@mountsqli/query";
+import { compilePlan } from "@mountsqli/compiler";
+
+const driver = new MockDriver();
+const q = tableQuery(driver, users).where("age", ">", 18);
+expect(compilePlan(q._plan).sql).toBe('SELECT * FROM "users" WHERE "age" > ?');
+```
+
+## Integration tests with real sqlite
+
+Use `node:sqlite` for real behavior:
+
+```ts
+import { mountsqli } from "@mountsqli/core";
+import "@mountsqli/driver-sqlite";
+
+const db = mountsqli({ driver: "sqlite", url: ":memory:", tables: [users] });
+await db.from(users).insert({ email: "a@b.c" });
+expect(await db.from(users).findOne()).not.toBeNull();
+```
+
+## Postgres with a fake pool
+
+Postgres is tested by injecting a **fake `Pool`** so no real database is needed:
+
+```ts
+const driver = new PostgresDriver({ pool: fakePool });
+// fakePool implements query() returning canned rows
+```
+
+This verifies `$N` translation and `borrow()` concurrency without a server.
+
+## Run the suite
+
+```bash
+pnpm --filter @mountsqli/core test
+pnpm --filter @mountsqli/query test
+pnpm --filter @mountsqli/auth test
+```
+
+## Best practices
+
+- Use `MockDriver` for plan-shape assertions (fast, deterministic).
+- Use real `node:sqlite` for integration of decode/type behavior.
+- Inject a fake pool for driver-specific tests (no external DB).
+
+## Common mistakes
+
+- Asserting on compiled SQL instead of the plan (brittle across dialects).
+- Forgetting `:memory:` resets per test file.
+
+## Related
+
+- [Deployment](/operations/deployment/) — running what you tested.
+- [Error Handling](/operations/error-handling/) — what errors tests should expect.

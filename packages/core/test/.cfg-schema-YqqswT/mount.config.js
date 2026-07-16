@@ -1,0 +1,1 @@
+export default { driver: "sqlite", schema: "./schema" };

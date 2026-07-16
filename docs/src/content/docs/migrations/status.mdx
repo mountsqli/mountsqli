@@ -1,0 +1,56 @@
+---
+title: Status
+description: See which migrations are applied and which are pending with mountsqli migrate status.
+---
+
+`migrate status` diffs the on-disk migrations against `_mount_migrations` and
+reports what has run and what is pending.
+
+## Syntax
+
+```bash
+mountsqli migrate status
+```
+
+## Example output
+
+```text
+$ mountsqli migrate status
+Applied:  2026-07-10T09-00-00_init.sql
+Pending:  2026-07-16T12-00-00_add_posts.sql
+```
+
+## How pending is computed
+
+`status` needs the **known set** — the migrations on disk — to compute `pending`.
+Call `status(knownSteps)` with those steps; with no argument `pending` is empty
+(issue 004). The CLI always supplies the known steps.
+
+```ts
+import { Migrator } from "@mountsqli/migration";
+
+const migrator = new Migrator(driver, migrationsDir);
+const { applied, pending } = await migrator.status(knownSteps);
+// applied: string[] of migration names
+// pending: MigrationStep[] not yet run
+```
+
+## Drift detection
+
+If a migration was applied but its file is gone, `status` flags the mismatch.
+The Studio and `mountsqli analyze` surface the same drift.
+
+## Best practices
+
+- Run `status` in CI to fail the build on unapplied migrations.
+- Treat `pending` as a to-do list before deploy.
+
+## Common mistakes
+
+- Calling `status()` with no args and expecting `pending` to be populated.
+- Deleting an applied file — status then reports drift.
+
+## Related
+
+- [Apply](/migrations/apply/) — run the pending ones.
+- [How Migrations Work](/migrations/how/) — the `_mount_migrations` table.

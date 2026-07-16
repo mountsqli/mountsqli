@@ -1,0 +1,61 @@
+---
+title: SQLite
+description: The zero-dependency SQLite driver using Node's built-in node:sqlite.
+---
+import { Aside } from '@astrojs/starlight/components';
+
+
+`@mountsqli/driver-sqlite` uses Node's built-in `node:sqlite`. It has **zero
+external dependencies**.
+
+## Install & use
+
+```bash
+pnpm add @mountsqli/driver-sqlite
+```
+
+```ts
+import "@mountsqli/driver-sqlite";
+import { mountsqli } from "@mountsqli/core";
+
+const db = mountsqli({ driver: "sqlite", url: ":memory:", tables: [users] });
+```
+
+## URL forms
+
+| URL | Behavior |
+| --- | --- |
+| `:memory:` | fresh in-memory DB, per process |
+| `./app.db` | file-backed, persists `_mount_migrations` |
+
+<Aside type="caution" title="Node version">
+This driver needs **Node ≥ 22.5** for `node:sqlite`. If you can't use that Node,
+choose Postgres or MySQL — they avoid the requirement.
+</Aside>
+
+## Bool decoding
+
+`bool()` columns are stored as `0`/`1`. The driver decodes them to `boolean` on
+read using type info carried in the plan, so you always get `true`/`false`.
+
+## Best for
+
+- Local development and tests (fast, no setup).
+- Edge/serverless where you want zero deps.
+- Scripts and CLIs.
+
+## Best practices
+
+- Use a file URL in apps so migrations persist.
+- Use `:memory:` for tests and one-off scripts.
+- Keep the Node version at ≥ 22.5 in CI.
+
+## Common mistakes
+
+- Running migrations against `:memory:` then wondering where they went.
+- Deploying on Node < 22.5 with this driver.
+
+## Related
+
+- [Drivers → Overview](/drivers/overview/) — all drivers.
+- [Postgres](/drivers/postgres/) — when you need a server DB.

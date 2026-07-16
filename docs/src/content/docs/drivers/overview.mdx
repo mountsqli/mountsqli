@@ -1,0 +1,57 @@
+---
+title: Drivers Overview
+description: How MountSQLI talks to databases — one Driver interface, many dialects.
+---
+
+A **Driver** translates `{ sql, params, columnTypes }` into rows. Drivers are
+thin: no query logic, just transport. Adding a database means writing a `Driver`
++ a `Dialect` — no query/IR code is duplicated.
+
+## The Driver interface
+
+Every driver implements the same interface:
+
+- `query(sql, params)` — run a statement, return rows
+- `transaction(fn)` — run a function in a transaction
+- `borrow()` (Postgres) — per-call scoped client from a pool
+
+## Registration
+
+Drivers self-register on import via `registerDriver`. You just import the package
+and name the driver in config:
+
+```ts
+import "@mountsqli/driver-sqlite"; // registers "sqlite"
+
+const db = mountsqli({ driver: "sqlite", url: ":memory:", tables: [users] });
+```
+
+## Available drivers
+
+| Package | Name(s) | Notes |
+| --- | --- | --- |
+| `@mountsqli/driver-sqlite` | `sqlite` | zero-dep `node:sqlite`, Node ≥ 22.5 |
+| `@mountsqli/driver-postgres` | `postgres`, `pg` | `pg`, `$N` params |
+| `@mountsqli/driver-mysql` | `mysql` | `mysql2`, `?` params |
+
+## Why config-only multi-driver?
+
+Switching databases is a **configuration detail**. The same `QueryPlan` runs on
+any driver — the dialect decides `?` vs `$N`. No query logic is duplicated per
+driver.
+
+## Best practices
+
+- Import the driver package once at startup so it registers.
+- Pick the driver by deployment, not by code (keep plans portable).
+
+## Common mistakes
+
+- Forgetting to import the driver package — `unknown driver` error.
+- Assuming SQL is identical across dialects (use the plan; the dialect handles it).
+
+## Related
+
+- [SQLite](/drivers/sqlite/) — zero-dep option.
+- [Postgres](/drivers/postgres/) — pooled, `$N` params.
+- [Compiler & Dialects](/architecture/compiler/) — `?` vs `$N`.

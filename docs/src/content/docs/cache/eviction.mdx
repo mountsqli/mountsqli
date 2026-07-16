@@ -1,0 +1,47 @@
+---
+title: Eviction Policies
+description: LRU, LFU, and FIFO eviction for the in-process cache.
+---
+
+When the cache is full, an **eviction policy** decides what to drop. MountSQLI's
+`MemoryCache` supports three.
+
+## Policies
+
+| Policy | Evicts | Best when |
+| --- | --- | --- |
+| **LRU** | least recently used | general purpose, recency matters |
+| **LFU** | least frequently used | hot keys should survive |
+| **FIFO** | first in, first out | simple, order-based churn |
+
+## Configure
+
+```ts
+import { CacheManager, MemoryCache } from "@mountsqli/cache";
+
+const manager = new CacheManager({
+  l1: new MemoryCache({ max: 1000, policy: "LRU" }),
+});
+```
+
+## How each works
+
+- **LRU** tracks last access time; drops the stalest.
+- **LFU** counts accesses; drops the least popular.
+- **FIFO** keeps an insertion queue; drops the oldest entry.
+
+## Best practices
+
+- Start with **LRU** — it fits most read patterns.
+- Use **LFU** for very skewed "hot key" workloads.
+- Size `max` to your working set; too small = thrash, too big = memory bloat.
+
+## Common mistakes
+
+- Setting `max` too low — every read misses.
+- Using FIFO when recency matters (drops still-useful entries).
+
+## Related
+
+- [Overview](/cache/overview/) — L1/L2 layers.
+- [Tags & Invalidation](/cache/tags/) — explicit invalidation.

@@ -1,0 +1,70 @@
+---
+title: Signed URLs
+description: Create and verify HMAC-signed, time-limited URLs — timing-safe by design.
+---
+import { Aside } from '@astrojs/starlight/components';
+
+
+A signed URL grants temporary read access to an object. The URL carries an HMAC
+signature; the server verifies it before serving the bytes.
+
+## Generate a signed URL
+
+```ts
+const url = storage.signUrl("avatar.png", {
+  expiresInSec: 300,
+  key: "my-signing-secret",
+});
+// /files/avatar.png?sig=...&exp=...
+```
+
+## Verify (handled by the server)
+
+The dev server and `StorageAdapter.verifySignedUrl` check:
+
+- the signature matches the key, and
+- the expiry has not passed.
+
+```ts
+const ok = storage.verifySignedUrl(url, "my-signing-secret");
+```
+
+## Timing-safe verification
+
+`verifySignedUrl` compares the HMAC with `timingSafeEqual` instead of a plain
+`===`. A plain comparison would leak the signature one byte at a time under
+careful timing measurement — `timingSafeEqual` closes that (hardening audit #3).
+
+<Aside type="caution" title="Don't compare signatures with ===">
+Always use the adapter's `verifySignedUrl`. Never re-implement signature checks
+with string equality — it reintroduces the timing leak.
+</Aside>
+
+## Real-world example
+
+```ts
+// client requests a download link
+app.get("/download/:key", (req, res) => {
+  const url = storage.signUrl(req.params.key, {
+    expiresInSec: 60,
+    key: process.env.SIGN_KEY!,
+  });
+  res.json({ url });
+});
+```
+
+## Best practices
+
+- Keep `expiresInSec` short (60–300s) for downloads.
+- Store the signing key in an env var, never in code.
+- Rotate the key periodically; old URLs then expire on next verification.
+
+## Common mistakes
+
+- Using a long expiry "for convenience" — widens the window if leaked.
+- Hand-comparing signatures (timing attack).
+
+## Related
+
+- [Overview](/storage/overview/) — storage concepts.
+- [S3 Adapter](/storage/s3/) — signed URLs over S3.

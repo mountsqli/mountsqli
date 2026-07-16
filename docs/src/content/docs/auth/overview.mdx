@@ -1,0 +1,63 @@
+---
+title: Auth Overview
+description: Two layers of auth in MountSQLI — low-level primitives and the NextAuth-style MountAuth framework.
+---
+
+`@mountsqli/auth` provides **two layers**. Pick the one that fits.
+
+## Layer 1 — Low-level primitives
+
+Small, dependency-free building blocks you compose yourself:
+
+- `hashPassword` / `verifyPassword` — scrypt credentials
+- `signJwt` / `verifyJwt` — HS256 + EdDSA tokens
+- `Rbac` — role → permission grants
+- `allowOwner` / `allowTenant` / `allowRole` / `andPolicies` — RLS policy DSL
+- `Auth` — session facade over a `TokenStore`
+- `MemoryRateLimiter` — opt-in brute-force limiter
+
+## Layer 2 — MountAuth framework
+
+A NextAuth.js-style framework for the full OAuth + session flow:
+
+- `MountAuth` / `createAuth`
+- Providers: `GoogleProvider`, `GitHubProvider`, `DiscordProvider`, `TwitterProvider`, `CredentialsProvider`
+- `createPgAdapter` — Postgres-backed user/account/session storage
+- Stateless JWT sessions in HTTP-only cookies
+- CSRF + PKCE built into the OAuth flow
+
+## Security guarantees
+
+MountSQLI's auth hardening pass closed real attack classes:
+
+- **JWT algorithm confusion** — `verifyJwt` enforces the configured `alg`.
+- **Weak password hashing** — scrypt `N = 2^15`, cost persisted in the hash.
+- **Timing attacks** — password and signed-URL compares are constant-time.
+- **Login-CSRF** — OAuth binds `state` + PKCE `code_verifier` to cookies.
+- **Brute force** — opt-in rate limiting / lockout on the login path.
+
+## Which layer should I use?
+
+| Need | Use |
+| --- | --- |
+| Full OAuth + session cookies | `MountAuth` (Layer 2) |
+| Just hash + verify passwords | `hashPassword` / `verifyPassword` |
+| Row-level security in queries | policy DSL (Layer 1) |
+| Hand-rolled login route | `Auth` facade + `MemoryRateLimiter` |
+
+## Best practices
+
+- Keep `MountAuth` out of the hot path — verify with `verifyPassword` + `signJwt`.
+- Use `createPgAdapter` for production sessions (not in-memory).
+- Enable rate limiting on any credential endpoint.
+
+## Common mistakes
+
+- Using `MemoryTokenStore` in production (sessions lost on restart).
+- Forgetting `rateLimit` on a public login route.
+
+## Related
+
+- [Passwords & JWT](/auth/passwords-jwt/) — the crypto primitives.
+- [OAuth & Providers](/auth/oauth/) — the framework flow.
+- [RLS Policy DSL](/auth/rls/) — query-level enforcement.

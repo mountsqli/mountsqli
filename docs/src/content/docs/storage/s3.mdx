@@ -1,0 +1,53 @@
+---
+title: S3 Adapter
+description: Plug MountSQLI storage into S3-compatible object stores.
+---
+
+The S3 adapter implements `StorageAdapter` against an S3-compatible API, so you
+get signed URLs, versioning, and ACLs over S3.
+
+## Setup
+
+```ts
+import { S3StorageAdapter } from "@mountsqli/storage";
+
+const storage = new S3StorageAdapter({
+  bucket: "my-bucket",
+  region: "us-east-1",
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+  endpoint: process.env.S3_ENDPOINT, // for S3-compatible stores
+});
+```
+
+## Use it like any adapter
+
+```ts
+await storage.put("avatar.png", buffer);
+const url = storage.signUrl("avatar.png", { expiresInSec: 300, key: SIGN_KEY });
+const bytes = await storage.get("avatar.png");
+```
+
+Errors from the S3 client are classified into `MountError("CONNECTION", ...)`
+with the raw detail in `details` — never leaked to the user.
+
+## Endpoint compatibility
+
+Set `endpoint` to use S3-compatible stores (MinIO, Cloudflare R2, etc.). Leave it
+unset for AWS S3.
+
+## Best practices
+
+- Load credentials from env, not code.
+- Use a dedicated IAM user with least-privilege bucket access.
+- Keep signed URLs short-lived.
+
+## Common mistakes
+
+- Hard-coding credentials in the adapter config.
+- Pointing `endpoint` at AWS when you meant to use default S3.
+
+## Related
+
+- [Signed URLs](/storage/signed-urls/) — timing-safe verification.
+- [Overview](/storage/overview/) — the `StorageAdapter` interface.

@@ -1,0 +1,85 @@
+---
+title: RLS Policy DSL
+description: Express row-level security as policies compiled into the QueryPlan — not app code.
+---
+
+Row-level security in MountSQLI is **compiled into the QueryPlan** as
+`FilterNode[]`, then injected as `WHERE` clauses. RLS lives in the plan, so
+`@mountsqli/query` stays free of `@mountsqli/auth` and `core` stays light.
+
+## Policy builders
+
+```ts
+import { allowOwner, allowTenant, allowRole, allowPublic, andPolicies } from "@mountsqli/auth";
+
+const policy = andPolicies(allowOwner("ownerId"), allowTenant("tenantId"));
+```
+
+| Builder | Meaning |
+| --- | --- |
+| `allowOwner(column)` | row allowed if `column = ctx.userId` |
+| `allowTenant(column)` | row allowed if `column = ctx.claims.tenantId` |
+| `allowRole(role)` | allowed if `ctx.roles` includes `role` |
+| `allowPublic()` | always allowed |
+| `andPolicies(...)` | all must pass |
+
+## Apply a policy to a query
+
+```ts
+import { applyPolicy } from "@mountsqli/auth";
+
+const scoped = applyPolicy(
+  db.from(files),
+  allowOwner("ownerId"),
+  { userId: "u1" },
+);
+const rows = await scoped.select();
+// → SELECT * FROM "files" WHERE "ownerId" = ?
+```
+
+`applyPolicy` returns a builder with the filter injected. An unauthenticated
+`allowOwner` compiles to `WHERE 1=0` (deny).
+
+## Compile without applying
+
+`compilePolicy(policy, ctx)` returns `{ filters, deny }` directly — storage
+reuses the same engine:
+
+```ts
+import { compilePolicy } from "@mountsqli/auth";
+
+const { filters, deny } = compilePolicy(allowOwner("ownerId"), { userId: 9 });
+// filters: [{ kind: "filter", column: "ownerId", op: "=", value: 9 }]
+```
+
+## Opt-in enforcement mode
+
+Register per-table default policies and enable enforcement on the `Db`:
+
+```ts
+import { createPolicyRegistry } from "@mountsqli/auth";
+
+const registry = createPolicyRegistry();
+registry.register("files", allowOwner("ownerId"));
+
+// driver.rls = { enforce: true, registry }
+```
+
+In enforce mode, querying a protected table **without** `applyPolicy` (or
+`.unsafe()`) throws `MountError("FORBIDDEN")`.
+
+## Best practices
+
+- Define policies once in a registry; apply them at the edge.
+- Use `compilePolicy` when you need the filters outside a query (e.g. storage).
+- Prefer `allowOwner`/`allowTenant` over hand-written `where()` for security.
+
+## Common mistakes
+
+- Forgetting `applyPolicy` in enforce mode — query is rejected.
+- Putting auth logic in `where()` instead of a policy (harder to audit).
+
+## Related
+
+- [Raw SQL & RLS Gate](/query-builder/raw-sql/) — `.unsafe()` and `withFilters`.
+- [RBAC](/auth/rbac/) — role-level (not row-level) authorization.

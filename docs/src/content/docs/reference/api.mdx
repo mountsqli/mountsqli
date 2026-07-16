@@ -1,0 +1,67 @@
+---
+title: API Reference
+description: Entry points for every MountSQLI package — what to import and from where.
+---
+
+This page maps each capability to its package and key exports. Full typed
+signatures live in each package's `.d.ts`.
+
+## Core
+
+| Import | From | Purpose |
+| --- | --- | --- |
+| `mountsqli`, `mountsqliFull`, `mountsqliExtended` | `mountsqli` | create typed `Db` |
+| `defineTable`, `int`, `text`, `bool`, `real`, `json`, `uuid`, `timestamp`, `enum_` | `mountsqli` | schema |
+| `InferTable`, `DbFromConfig` | `mountsqli` | types |
+| `defineConfig` | `mountsqli` | config |
+
+## Query
+
+| Import | From | Purpose |
+| --- | --- | --- |
+| `QueryBuilder`, `tableQuery`, `sql` | `@mountsqli/query` | build queries |
+| `compilePlan` | `@mountsqli/compiler` | plan → SQL |
+
+## Auth
+
+| Import | From | Purpose |
+| --- | --- | --- |
+| `hashPassword`, `verifyPassword`, `signJwt`, `verifyJwt` | `@mountsqli/auth` | crypto |
+| `Rbac` | `@mountsqli/auth` | roles |
+| `Auth`, `MemoryTokenStore`, `PgTokenStore` | `@mountsqli/auth` | sessions |
+| `allowOwner`, `allowTenant`, `applyPolicy` | `@mountsqli/auth` | RLS |
+| `MountAuth`, `createAuth`, `createPgAdapter` | `@mountsqli/auth` | OAuth framework |
+| `MemoryRateLimiter` | `@mountsqli/auth` | rate limiting |
+
+## Backend subsystems
+
+| Package | Key exports |
+| --- | --- |
+| `@mountsqli/api` | `createRouter`, `createRestHandler`, `toOpenApi`, `toTrpc`, `crudRoutes` |
+| `@mountsqli/storage` | `StorageAdapter`, `S3StorageAdapter`, `signUrl`/`verifySignedUrl` |
+| `@mountsqli/realtime` | `Hub`, `Channel`, `PresenceChannel`, `LiveQuery` |
+| `@mountsqli/cache` | `CacheManager`, `CacheBridge`, `MemoryCache`, `RedisCacheDriver`, `QueryCacheAnalyzer` |
+| `@mountsqli/ai` | `Ai`, `nlToSql`, `explainPlan`, `optimizePlan`, `reviewPlans` |
+
+## Drivers
+
+| Package | Registers |
+| --- | --- |
+| `@mountsqli/driver-sqlite` | `sqlite` |
+| `@mountsqli/driver-postgres` | `postgres`, `pg` |
+| `@mountsqli/driver-mysql` | `mysql` |
+
+## CLI
+
+`mountsqli migrate generate|apply|status`, `mountsqli dev`, `mountsqli analyze`,
+`mountsqli api generate`, `mountsqli init`.
+
+## Best practices
+
+- Import only the subsystems you use — keep the bundle small.
+- Prefer `mountsqliExtended` when using auth/realtime/storage.
+
+## Related
+
+- [Glossary](/reference/glossary/) — term definitions.
+- [Architecture → How It Works](/architecture/how-it-works/) — the model.

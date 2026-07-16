@@ -1,0 +1,58 @@
+---
+title: Rollback
+description: How to undo migrations in MountSQLI — down SQL, restore, and safe practices.
+---
+
+MountSQLI records applied steps in `_mount_migrations` but does not generate
+automatic **down** migrations. Rolling back is a deliberate act.
+
+## Why no auto-rollback
+
+Automated down-migrations are unsafe for data: dropping a column loses rows,
+and reversing a data transform is rarely reversible. MountSQLI prefers explicit,
+reviewed rollback steps over magic.
+
+## Recommended rollback strategies
+
+### 1. Write a down migration by hand
+
+Create a new migration that reverses the change:
+
+```sql
+-- migrations/2026-07-17T00-00-00_revert_add_posts.sql
+DROP TABLE "posts";
+```
+
+Generate it the same way you would any migration, then apply it.
+
+### 2. Restore from backup
+
+For destructive changes, restore the database from a pre-migration backup and
+re-apply `_mount_migrations` accordingly.
+
+### 3. Make changes reversible by design
+
+Prefer `ADD COLUMN` (nullable, with default) over `ALTER COLUMN`. Additive
+changes are easy to reverse; in-place alters are not.
+
+## Removing a recorded step
+
+If a step was applied by mistake and you accept the consequences, you can delete
+its row from `_mount_migrations` and re-run `migrate status`. Do this only in
+non-production or with a full understanding of the state.
+
+## Best practices
+
+- Treat every migration as append-only; never edit an applied file.
+- Preview with `migrate apply --dry-run` before running.
+- Keep migrations small and additive so rollback is localized.
+
+## Common mistakes
+
+- Editing an already-applied migration file — it desyncs from `_mount_migrations`.
+- Expecting `migrate rollback` to exist (it does not).
+
+## Related
+
+- [Apply](/migrations/apply/) — the `--dry-run` flag.
+- [Status](/migrations/status/) — confirm state after a rollback.

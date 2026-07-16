@@ -1,0 +1,65 @@
+---
+title: Type-Safety System
+description: Phantom types and InferTable — how MountSQLI knows your row shape at compile time.
+---
+
+MountSQLI derives row types from your schema with **phantom types** and inference
+helpers. No generators, no decorators.
+
+## The trick: phantom type params
+
+Each `ColumnBuilder` carries a phantom type param for its SQL type and
+nullability:
+
+```ts
+const users = defineTable("users", {
+  id: int().pk(),          // ColumnBuilder<"int", false>
+  email: text().notNull(), // ColumnBuilder<"text", false>
+  age: int(),              // ColumnBuilder<"int", true>  (nullable)
+});
+```
+
+The phantom params are erased at runtime but drive inference at compile time.
+
+## InferTable maps them
+
+`InferTable` uses a `TypeMap` to turn each column's phantom type into a TS type,
+and nullability decides `| null`:
+
+```ts
+type User = InferTable<typeof users>;
+// { id: number; email: string; age: number | null }
+```
+
+## The TypeMap
+
+| SQL type | TS type |
+| --- | --- |
+| `int` | `number` |
+| `text` | `string` |
+| `bool` | `boolean` |
+| `blob` | `Uint8Array` |
+| `json` | `unknown` |
+| `timestamp` | `Date` |
+
+## Why no codegen?
+
+Because the type lives in the column builders themselves, inference is immediate
+and always in sync. Change a column, and every query result type updates on the
+next `tsc` — there's nothing to regenerate.
+
+## Best practices
+
+- Export `type User = InferTable<typeof users>` next to each table.
+- Use `DbFromConfig<typeof config>` for the app-wide `Db`.
+- Let type errors catch bad column names before runtime.
+
+## Common mistakes
+
+- Hand-writing row interfaces that drift from the table.
+- Using `any` and losing the inference.
+
+## Related
+
+- [InferTable](/schema/infertable/) — the user-facing API.
+- [Defining Tables](/schema/defining-tables/) — the column builders.

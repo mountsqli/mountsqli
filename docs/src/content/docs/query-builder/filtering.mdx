@@ -1,0 +1,99 @@
+---
+title: Filtering
+description: Filter rows with where() — every comparator, OR groups, IN, BETWEEN, LIKE, IS NULL, and subqueries.
+---
+
+`where()` adds a filter to the plan. Filters compile to `WHERE` clauses with
+bound parameters. Values are never interpolated into SQL.
+
+## Comparators
+
+```ts
+db.from(users).where("age", ">", 18);
+db.from(users).where("age", ">=", 18);
+db.from(users).where("age", "<", 65);
+db.from(users).where("age", "<=", 65);
+db.from(users).where("email", "=", "a@b.c");
+db.from(users).where("email", "!=", "a@b.c");
+```
+
+| Operator | Meaning |
+| --- | --- |
+| `=` `!=` | equality / inequality |
+| `>` `>=` `<` `<=` | numeric / date comparison |
+| `like` | pattern match (`%` wildcard) |
+| `in` | value in a list |
+| `is` `is not` | null checks |
+| `between` | range (inclusive) |
+
+## IN
+
+```ts
+db.from(users).where("id", "in", [1, 2, 3]);
+// → WHERE "id" IN (?, ?, ?)
+```
+
+## LIKE
+
+```ts
+db.from(users).where("email", "like", "ada%");
+```
+
+## IS NULL
+
+```ts
+db.from(users).where("age", "is", null);
+db.from(users).where("age", "is not", null);
+```
+
+## BETWEEN
+
+```ts
+db.from(users).where("age", "between", [18, 65]);
+```
+
+## OR groups
+
+Pass a function to `or()` to group alternatives:
+
+```ts
+db.from(users).or((b) =>
+  b.where("age", "<", 18).where("age", ">", 65),
+);
+// → WHERE ("age" < ? OR "age" > ?)
+```
+
+## Subqueries (EXISTS / IN)
+
+```ts
+db.from(users).whereExists(
+  db.from(posts).where("authorId", "=", /* column ref */ "users.id"),
+);
+```
+
+## FilterNode for RLS
+
+You can pass a raw `FilterNode` to `where()` — this is how RLS policies inject
+filters:
+
+```ts
+import { applyPolicy } from "@mountsqli/auth";
+const scoped = applyPolicy(db.from(files), allowOwner("ownerId"), { userId });
+```
+
+## Best practices
+
+- Chain `where()` to AND multiple conditions.
+- Use `in` for membership instead of multiple `or` equals.
+- Keep filters in the plan; don't filter rows in app code.
+
+## Common mistakes
+
+- Using `=` with `null` — use `is null` instead.
+- String-interpolating a value into a raw expression — bind it as a param.
+
+## Related
+
+- [Select](/query-builder/select/) — running filtered queries.
+- [Raw SQL & RLS Gate](/query-builder/raw-sql/) — `whereExpr`.
+- [RLS Policy DSL](/auth/rls/) — policies as FilterNode[].

@@ -1,0 +1,55 @@
+---
+title: OpenAPI & Codegen
+description: Generate an OpenAPI 3.1 spec from your Router, and emit it with the CLI.
+---
+
+Your `Router` is the single source for an OpenAPI document. `toOpenApi(router)`
+produces OpenAPI 3.1 JSON; the CLI writes it to disk.
+
+## In code
+
+```ts
+import { toOpenApi } from "@mountsqli/api";
+
+const spec = toOpenApi(router, "My API");
+// → OpenAPI 3.1 object keyed by route
+```
+
+## With the CLI
+
+```bash
+mountsqli api generate
+```
+
+It reads the output path from `mountsqli.config.js` or defaults to
+`openapi.json`. The dev server also serves the spec for Studio.
+
+## What's in the spec
+
+- Each named route becomes an OpenAPI operation (operationId = route name).
+- CRUD routes expand to list/create/read/update/delete operations.
+- Validation shapes (`ValidationShape`) become request/response schemas.
+
+## Real-world example
+
+```ts
+const router = createRouter();
+router.get("/users", { plan: db.from(users)._plan, description: "List users" });
+const spec = toOpenApi(router, "Users API");
+```
+
+## Best practices
+
+- Name every route — the name is the operationId consumers see.
+- Add a `description` per route for better docs.
+- Regenerate the spec in CI so it never drifts from code.
+
+## Common mistakes
+
+- Forgetting route names — OpenAPI operationIds become generic.
+- Hand-writing the spec instead of generating from the router.
+
+## Related
+
+- [REST Handler](/api/rest/) — serve the router.
+- [RPC](/api/rpc/) — the tRPC-style alternative.

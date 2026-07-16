@@ -1,0 +1,63 @@
+---
+title: API Overview
+description: Build REST, OpenAPI, and RPC APIs from named QueryPlans with the MountSQLI API package.
+---
+
+`@mountsqli/api` turns your queries into HTTP APIs. You define **named routes**
+from `QueryPlan`s, then serve them as REST, generate OpenAPI, or expose them as
+RPC — all from one `Router`.
+
+## The Router
+
+```ts
+import { createRouter, crudRoutes } from "@mountsqli/api";
+import { users } from "./tables";
+
+const router = createRouter();
+router.get("/users", { plan: db.from(users)._plan });
+router.use(crudRoutes(users.def)); // auto GET/POST/PUT/DELETE
+```
+
+## What you get
+
+| Capability | Function |
+| --- | --- |
+| REST handler | `createRestHandler(router)` |
+| OpenAPI JSON | `toOpenApi(router)` / `generateOpenApi` |
+| RPC (tRPC-style) | `toTrpc(router)` |
+| CRUD scaffolding | `crudRoutes(tableDef)` |
+| Query parsing | `parseFilterQuery`, `paginationMeta` |
+
+## Auth is awaited
+
+`createRestHandler` is **async**. It `await`s the route's auth middleware and
+returns `403` on failure. Callers MUST `await` it — earlier versions fired auth
+and let requests through unauthenticated (fixed in the hardening pass).
+
+```ts
+const out = await ctx.rest(restReq, /* db */);
+// out is { route, plan, params } or a RestResponse (403 on auth failure)
+```
+
+## Why codegen from plans?
+
+Because routes are `QueryPlan`s, they are type-checked and injection-safe by
+construction — the same guarantees as the builder. The AI package can emit the
+same plans.
+
+## Best practices
+
+- Name every route; OpenAPI uses the name as the operationId.
+- Use `crudRoutes` for standard table endpoints, custom routes for logic.
+- Always `await` the REST handler.
+
+## Common mistakes
+
+- Not `await`ing `createRestHandler` — auth bypass returns.
+- Building SQL strings in handlers instead of passing a plan.
+
+## Related
+
+- [REST Handler](/api/rest/) — serve routes over HTTP.
+- [OpenAPI & Codegen](/api/openapi/) — emit the spec.
+- [Auth Middleware](/api/auth-middleware/) — the awaited guard.

@@ -1,0 +1,55 @@
+---
+title: Cache Overview
+description: L1/L2/query caching with tags, eviction, and an analyzer in MountSQLI.
+---
+
+`@mountsqli/cache` caches query results to cut database load. It has a two-layer
+store (L1 in-process, L2 shared), tag-based invalidation, and an analyzer that
+decides what's safe to cache.
+
+## Layers
+
+```mermaid
+graph TD
+  Q[Query] --> B[CacheBridge]
+  B --> L1[L1: in-process MemoryCache]
+  B --> L2[L2: shared (e.g. RedisCacheDriver)]
+```
+
+- **L1** — fastest, per-process (`MemoryCache`).
+- **L2** — shared across instances (`RedisCacheDriver`).
+
+## The Bridge
+
+`CacheBridge` sits between your queries and the `CacheManager`. On a read it
+serves cached rows; on a write it invalidates by table tag.
+
+```ts
+import { CacheBridge } from "@mountsqli/cache";
+
+const bridge = new CacheBridge(manager);
+const { rows, fromCache } = await bridge.query(db, plan);
+// after a write: await bridge.invalidateAfterWrite(plan);
+```
+
+## What gets cached
+
+The `QueryCacheAnalyzer` inspects a `QueryPlan` and decides cacheability (e.g.
+`SELECT`s are cacheable; writes are not). Cache keys are built from the plan via
+`buildCacheKey`.
+
+## Best practices
+
+- Use the bridge for read-heavy endpoints.
+- Let writes flow through `invalidateAfterWrite` so caches stay correct.
+- Put L2 (Redis) in front of L1 for multi-instance apps.
+
+## Common mistakes
+
+- Caching writes or non-deterministic queries.
+- Forgetting to invalidate on write — stale reads.
+
+## Related
+
+- [Eviction Policies](/cache/eviction/) — LRU/LFU/FIFO.
+- [Tags & Invalidation](/cache/tags/) — invalidate by table.

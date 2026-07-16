@@ -1,0 +1,83 @@
+---
+title: Express + Postgres
+description: A reference Express backend using MountSQLI, Postgres, and migrations.
+---
+import { Aside, FileTree } from '@astrojs/starlight/components';
+
+`examples/express-app` is a minimal but complete REST backend. It shows the
+production-shaped way to wire MountSQLI into Express.
+
+## Layout
+
+<FileTree>
+- express-app/
+  - mountsqli.config.ts
+  - schema/
+    - users.ts
+  - src/
+    - server.ts
+  - package.json
+</FileTree>
+
+
+## The config
+
+```ts
+// mountsqli.config.ts
+import { defineConfig } from "@mountsqli/core";
+import { users } from "./schema";
+
+export default defineConfig({
+  driver: "postgres",
+  url: process.env.DATABASE_URL!,
+  tables: [users],
+});
+```
+
+## Routes
+
+REST endpoints use the API package's `createRestHandler` with `crudRoutes`:
+
+```ts
+import { createRouter, createRestHandler, crudRoutes } from "@mountsqli/api";
+
+const router = createRouter();
+router.use(crudRoutes(users.def));
+const handle = createRestHandler(router);
+
+app.all("/users/*", async (req, res) => {
+  const out = await handle(toRestRequest(req)); // awaited!
+  if ("status" in out) return res.status(out.status).json(out.body);
+  // run out.plan against db...
+});
+```
+
+## Run it
+
+```bash
+DATABASE_URL=postgres://localhost:5432/app pnpm --filter express-app build
+pnpm --filter express-app migrate apply
+pnpm --filter express-app dev
+curl http://localhost:3741/users
+```
+
+## What it demonstrates
+
+- Typed `Db` from config (`DbFromConfig`).
+- Migrations applied before serving.
+- Awaited REST handler with auth.
+
+## Best practices
+
+- Apply migrations in the deploy step, before `listen`.
+- Keep the config as the schema of record.
+
+## Common mistakes
+
+- Not `await`ing `createRestHandler` (auth bypass).
+- Serving before `migrate apply` (tables missing).
+
+## Related
+
+- [REST Handler](/api/rest/) — the handler in depth.
+- [Migrations → Apply](/migrations/apply/) — the deploy step.

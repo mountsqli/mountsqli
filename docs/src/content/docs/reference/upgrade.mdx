@@ -1,0 +1,55 @@
+---
+title: Upgrade Guide
+description: Upgrade notes and version history for MountSQLI.
+---
+import { Steps } from '@astrojs/starlight/components';
+
+
+This page tracks breaking changes and upgrade steps between releases.
+
+## Current version
+
+All packages are versioned together at **`0.6.0`** (the v0.6 Production
+Hardening release).
+
+## v0.5 → v0.6 (Production Hardening)
+
+The hardening pass changed behavior in security-relevant ways. Review these:
+
+| Change | Action |
+| --- | --- |
+| JWT algorithm now enforced | set `alg` explicitly on `signJwt`/`verifyJwt` |
+| scrypt cost raised to `N=2^15` | re-hash on next login; old hashes still verify |
+| Raw-SQL hatches guarded | remove `;`, `--`, `/*` from `selectExpr`/`whereExpr` |
+| API auth is awaited | `await createRestHandler(...)`; handle `403` |
+| `PgDriver.transaction` commit classified | wrap commit errors; rollback attempted |
+| RLS enforcement opt-in | register policies + `enforceRls` if you want it |
+
+## v0.2 → v0.6 (version bump)
+
+All packages moved from `0.2.0` to `0.6.0`. Update every `@mountsqli/*`
+package together — they share a version.
+
+## General upgrade steps
+
+<Steps>
+1. Bump all `@mountsqli/*` packages to the same version.
+2. Run `pnpm install` and `pnpm -r typecheck`.
+3. Apply the v0.5 → v0.6 items above.
+4. Run `pnpm -r test` and `mountsqli migrate status`.
+</Steps>
+
+## Best practices
+
+- Keep all `@mountsqli/*` packages on the same version.
+- Run `mountsqli analyze` after upgrading to catch drift.
+
+## Common mistakes
+
+- Mixing package versions (they're released in lockstep).
+- Skipping the RLS opt-in decision (enforcement is off by default).
+
+## Related
+
+- [Roadmap](/reference/roadmap/) — what's next (v1.0).
+- [Error Handling](/operations/error-handling/) — the `MountError` codes.

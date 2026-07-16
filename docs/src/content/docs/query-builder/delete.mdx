@@ -1,0 +1,58 @@
+---
+title: Delete
+description: Delete rows with delete() — scoped by where().
+---
+import { Aside } from '@astrojs/starlight/components';
+
+
+`delete()` removes matching rows. Add `where()` to scope it.
+
+## Delete with a filter
+
+```ts
+await db.from(users).where("id", "=", 1).delete();
+```
+
+## Delete all rows
+
+Omit `where()` to delete everything in the table:
+
+```ts
+await db.from(users).delete();
+```
+
+<Aside type="danger" title="No filter = truncate">
+Without `where()`, `delete()` removes every row. Use with care — there is no
+undo unless you have a backup or migration.
+</Aside>
+
+## How it compiles
+
+```ts
+db.from(users).where("id", "=", 1).delete();
+// → DELETE FROM "users" WHERE "id" = ?
+```
+
+## Real-world example
+
+```ts
+export async function removeUser(id: number) {
+  await db.from(users).where("id", "=", id).delete();
+}
+```
+
+## Best practices
+
+- Always scope deletes with `where()` unless you intend a full clear.
+- Consider a soft-delete (`update({ deletedAt })`) for recoverable data.
+- Wrap destructive deletes in a transaction when multiple tables are involved.
+
+## Common mistakes
+
+- Forgetting `where()` and wiping the table.
+- Deleting without a FK `ON DELETE` strategy — orphans may remain.
+
+## Related
+
+- [Update](/query-builder/update/) — modify instead of remove.
+- [Filtering](/query-builder/filtering/) — scope the delete.

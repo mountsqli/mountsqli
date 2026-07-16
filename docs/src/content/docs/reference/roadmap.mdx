@@ -1,0 +1,49 @@
+---
+title: Roadmap
+description: The MountSQLI release roadmap from v0.1 to v1.0.
+---
+
+MountSQLI progresses in versioned milestones. All current packages are at
+**`0.6.0`**.
+
+## Completed
+
+| Version | Milestone | Status |
+| --- | --- | --- |
+| v0.1 | Core PoC | ✅ |
+| v0.2 | Multi-driver + migrations | ✅ |
+| v0.3 | Auth + storage + realtime | ✅ |
+| v0.4 | AI + API engine | ✅ |
+| v0.5 | CLI + Studio GUI | ✅ |
+| v0.6 | Production hardening | ✅ |
+
+## v0.6 — Production Hardening (done)
+
+Security + error-handling audit applied:
+
+- **Security:** JWT algorithm enforced, scrypt cost raised + persisted, signed-URL
+  compare timing-safe, raw-SQL hatches guarded, opt-in login rate limiting,
+  Postgres commit errors classified, OAuth CSRF/PKCE.
+- **Error handling:** every external path emits `MountError`; API auth awaited.
+- **CI:** `.github/workflows/ci.yml` gates build → typecheck → test on Node 24.
+
+## Known issues (documented, lower priority)
+
+- #7 multi-instance session-store strategy (use `PgTokenStore`/Redis).
+- #11 Node ≥ 22.5 required for the zero-dep `node:sqlite` driver.
+- #12 storage `listSecure` is O(N) per object.
+- #13 `MemoryTokenStore` loses sessions on restart / not shared.
+
+## Next
+
+- **v1.0** — cloud + marketplace.
+
+## Best practices
+
+- Track the GitHub releases for the authoritative changelog.
+- Pin to a `0.6.x` version in production until v1.0.
+
+## Related
+
+- [Upgrade Guide](/reference/upgrade/) — version notes.
+- [Contributing](/reference/contributing/) — help reach v1.0.

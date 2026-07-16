@@ -1,0 +1,71 @@
+---
+title: Error Handling
+description: Structured MountError vs raw Error — when each is used and what codes exist.
+---
+
+MountSQLI separates **user-facing errors** (structured `MountError`) from
+**programmer bugs** (plain `Error`).
+
+## MountError
+
+Every external-facing path emits a `MountError` with a `code` and a sanitized
+message. Raw library detail goes in `details`, never the user-facing message.
+
+```ts
+class MountError extends Error {
+  code: string;       // e.g. "CONFIG", "CONNECTION", "FORBIDDEN"
+  message: string;    // sanitized, safe to show
+  details?: unknown;  // raw detail, for logs only
+}
+```
+
+## When MountError is used
+
+| Code | Where |
+| --- | --- |
+| `CONFIG` | config loading, unknown driver, missing provider |
+| `CONNECTION` | driver connect/query failure, S3 client errors |
+| `VALIDATION` | raw-SQL guard rejection, bad input |
+| `FORBIDDEN` | RLS enforcement denied a query |
+| `QUERY_FAILED` | Postgres commit failure (classified + rollback) |
+| `NOT_FOUND` | storage key missing |
+
+## Plain Error (programmer bugs)
+
+Unknown column type, invalid schema usage, and other mistakes are **plain
+`Error`** — they're caught by `tsc`/typecheck, not runtime. Don't wrap them in
+`MountError`; they shouldn't reach production.
+
+## Why the split?
+
+- User-facing errors are actionable and safe to surface.
+- Programmer bugs fail fast at build/test time, not as vague runtime messages.
+
+## Real-world handling
+
+```ts
+try {
+  await handle(req);
+} catch (e) {
+  if (e instanceof MountError) {
+    return res.status(statusFor(e.code)).json({ error: e.message });
+  }
+  throw e; // programmer bug — let it surface in logs
+}
+```
+
+## Best practices
+
+- Surface `MountError.message`; log `details` server-side.
+- Don't catch and swallow `MountError` — handle by code.
+- Let typecheck catch the plain-`Error` class of bugs.
+
+## Common mistakes
+
+- Leaking `details` to the client (it may contain paths/SQL).
+- Wrapping programmer bugs in `MountError` (hides them from typecheck).
+
+## Related
+
+- [Testing](/operations/testing/) — assert on error codes.
+- [Raw SQL & RLS Gate](/query-builder/raw-sql/) — `VALIDATION` in action.

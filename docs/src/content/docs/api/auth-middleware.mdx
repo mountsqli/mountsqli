@@ -1,0 +1,66 @@
+---
+title: Auth Middleware
+description: Protect API routes — the auth check is awaited and returns 403 on failure.
+---
+import { Aside } from '@astrojs/starlight/components';
+
+
+Routes can carry an `auth` middleware. The REST handler **awaits** it and returns
+`403` when it fails. This is a deliberate security guarantee.
+
+## Define an authenticated route
+
+```ts
+router.get("/users/me", {
+  plan: db.from(users).where("id", "=", (ctx) => ctx.userId)._plan,
+  auth: async (req) => {
+    const token = req.headers.authorization?.replace("Bearer ", "");
+    if (!token) return false;
+    const r = await auth.authenticate(token);
+    return r.ok; // true = allowed
+  },
+});
+```
+
+## The handler awaits it
+
+```ts
+const out = await handle(restReq);
+if ("status" in out && out.status === 403) {
+  return res.status(403).json(out.body); // { error: "Forbidden" }
+}
+```
+
+If `auth` throws or returns false, the handler short-circuits with `403`. The
+request never reaches the query.
+
+<Aside type="danger" title="No fire-and-forget">
+An earlier version called `auth()` without `await` and swallowed errors with
+`.catch(() => {})` — requests passed through unauthenticated. The handler is now
+async and awaited (hardening audit P0-A). Always `await handle(...)`.
+</Aside>
+
+## Pair with RLS
+
+For row-level scoping, combine route auth with an RLS policy:
+
+```ts
+const scoped = applyPolicy(db.from(files), allowOwner("ownerId"), ctx);
+router.get("/files", { plan: scoped._plan, auth: requireUser });
+```
+
+## Best practices
+
+- Return `false` (not throw) for "not authorized" — reserve throws for errors.
+- Combine auth middleware with RLS for defense in depth.
+- Centralize auth in one middleware factory and reuse it.
+
+## Common mistakes
+
+- Forgetting to `await` the handler — auth runs too late.
+- Only checking auth in handlers, not at the route level.
+
+## Related
+
+- [REST Handler](/api/rest/) — where auth is invoked.
+- [RLS Policy DSL](/auth/rls/) — row-level scoping.

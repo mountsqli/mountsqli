@@ -1,0 +1,77 @@
+---
+title: Upsert (ON CONFLICT)
+description: Insert or update on conflict with upsert() and insertIgnore().
+---
+
+Upsert inserts a row, and if a unique/primary-key conflict occurs, updates it
+(or does nothing). MountSQLI compiles this to `ON CONFLICT`.
+
+## Upsert (DO UPDATE SET)
+
+`upsert(values, constraint, set)` inserts, and on conflict updates the given
+columns:
+
+```ts
+await db.from(users).upsert(
+  { email: "ada@example.com", age: 36 },
+  "email",                 // conflict target (unique column or constraint)
+  { age: 36 },             // columns to set on conflict
+);
+// → INSERT ... ON CONFLICT ("email") DO UPDATE SET "age" = ?
+```
+
+## Insert ignore (DO NOTHING)
+
+`insertIgnore(values, constraint?)` inserts only if there is no conflict:
+
+```ts
+await db.from(users).insertIgnore({ email: "ada@example.com" }, "email");
+// → INSERT ... ON CONFLICT ("email") DO NOTHING
+```
+
+Without a constraint, it uses the primary key.
+
+## Multi-column conflict
+
+Pass an array for a composite unique target:
+
+```ts
+await db.from(memberships).upsert(
+  { userId: 1, teamId: 2, role: "admin" },
+  ["userId", "teamId"],
+  { role: "admin" },
+);
+```
+
+## How it compiles
+
+```sql
+INSERT INTO "users" ("email","age") VALUES (?,?)
+ON CONFLICT ("email") DO UPDATE SET "age" = ?
+```
+
+## Real-world example
+
+Idempotent user upsert:
+
+```ts
+export async function saveUser(email: string, age: number) {
+  await db.from(users).upsert({ email, age }, "email", { age });
+}
+```
+
+## Best practices
+
+- Name the conflict target explicitly (column or constraint name).
+- Use `insertIgnore` for "create if absent" semantics.
+- Use `upsert` when the row should reflect the latest values.
+
+## Common mistakes
+
+- Omitting the conflict target — the DB can't know what to conflict on.
+- Forgetting the `set` map in `upsert` (nothing updates).
+
+## Related
+
+- [Insert](/query-builder/insert/) — plain inserts.
+- [Constraints & Defaults](/schema/constraints/) — define the unique target.

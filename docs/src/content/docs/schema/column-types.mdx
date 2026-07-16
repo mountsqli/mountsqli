@@ -1,0 +1,92 @@
+---
+title: Column Types
+description: Every column factory in MountSQLI, its SQL type, and its inferred TypeScript type.
+---
+import { Aside } from '@astrojs/starlight/components';
+
+
+Column factories map a SQL type to a TypeScript type. The mapping is fixed, so
+`InferTable` always knows the row shape.
+
+## Type map
+
+| Factory | SQL type | Inferred TS type | Notes |
+| --- | --- | --- | --- |
+| `int()` | INTEGER | `number` | auto-increment when `.pk()` |
+| `text()` | TEXT | `string` | |
+| `real()` | REAL | `number` | floating point |
+| `bool()` | INTEGER | `boolean` | stored as 0/1, decoded on read |
+| `blob()` | BLOB | `Uint8Array` | binary data |
+| `json()` | JSON | `unknown` | cast as needed |
+| `uuid()` | TEXT | `string` | store UUIDs as text |
+| `timestamp()` | TIMESTAMP | `Date` | |
+| `enum(...)` | TEXT | `string` | constrained to listed values |
+
+## Enum columns
+
+`enum()` takes the allowed string values. The value is stored as text but
+type-checked against the list.
+
+```ts
+import { defineTable, enum_ } from "@mountsqli/core";
+
+const tasks = defineTable("tasks", {
+  status: enum_("todo", "doing", "done")(),
+});
+// status: "todo" | "doing" | "done"
+```
+
+<Aside type="note" title="Import name">
+Because `enum` is a reserved word, the export is `enum_`. It is also re-exported
+as `enum` via an alias, but `enum_` avoids shadowing issues.
+</Aside>
+
+## JSON columns
+
+`json()` stores anything serializable. The inferred type is `unknown`, so narrow
+it at the call site:
+
+```ts
+const docs = defineTable("docs", { data: json() });
+type Doc = InferTable<typeof docs>; // { data: unknown }
+
+const row = await db.from(docs).findOne();
+const name = (row!.data as { name: string }).name;
+```
+
+## Nullability
+
+Every column is **nullable by default**. Chain `.notNull()` to make it required.
+Nullability flows into the row type:
+
+```ts
+const t = defineTable("t", {
+  a: int(),        // number | null
+  b: int().notNull(), // number
+});
+```
+
+## Timestamps
+
+`timestamp()` maps to `Date`. Use `.defaultNow()` for a SQL-level
+`CURRENT_TIMESTAMP` default:
+
+```ts
+createdAt: timestamp().notNull().defaultNow(),
+```
+
+## Best practices
+
+- Prefer `int().pk()` over a string id unless you need UUIDs.
+- Use `bool()` for flags; the 0/1 storage is handled for you.
+- Narrow `json()` results at the edge of your app, not in queries.
+
+## Common mistakes
+
+- Assuming `bool()` returns `0`/`1` — it returns `true`/`false`.
+- Leaving columns nullable when they should be required.
+
+## Related
+
+- [Defining Tables](/schema/defining-tables/) — how to compose columns.
+- [Constraints & Defaults](/schema/constraints/) — `.notNull()`, `.default()`.

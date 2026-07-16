@@ -1,0 +1,70 @@
+---
+title: QueryPlan IR
+description: The intermediate representation every MountSQLI query compiles to.
+---
+
+The `QueryPlan` is a plain data object describing a query. It is the contract
+between the builder, the dialect, RLS, the Studio, and the AI.
+
+## Shape
+
+```ts
+interface QueryPlan {
+  op: "select" | "insert" | "update" | "delete";
+  table: string;
+  columns?: string[];
+  where?: FilterNode | FilterNode[];
+  joins?: { type: "inner" | "left" | "right"; table: string; on: [string, string] }[];
+  orderBy?: { column: string; dir: "asc" | "desc" }[];
+  limit?: number;
+  offset?: number;
+  groupBy?: string[];
+  having?: FilterNode[];
+  with?: { name: string; query: QueryPlan }[]; // CTEs
+  onConflict?: OnConflict;                       // upsert
+  // ...aggregates, windows, raw filters, etc.
+}
+```
+
+## FilterNode
+
+Filters are structured, not strings:
+
+```ts
+type FilterNode =
+  | { kind: "filter"; column: string; op: Comparator; value: unknown }
+  | { kind: "and"; nodes: FilterNode[] }
+  | { kind: "or"; nodes: FilterNode[] }
+  | { kind: "exists"; query: QueryPlan };
+```
+
+This is exactly what RLS policies compile into. `allowOwner("ownerId")` becomes
+`{ kind: "filter", column: "ownerId", op: "=", value: userId }`.
+
+## Why data, not objects
+
+- **Serializable** — log it, inspect it, send it over the wire.
+- **Rewritable** — RLS injects filters before compile.
+- **Testable** — assert on the plan, not on SQL strings.
+
+## Inspect a plan
+
+```ts
+const plan = db.from(users).where("age", ">", 18)._plan;
+console.log(plan); // the IR
+```
+
+## Best practices
+
+- Write unit tests against `_plan` for query logic.
+- Use `FilterNode[]` from `compilePolicy` to inject RLS.
+
+## Common mistakes
+
+- Asserting on compiled SQL instead of the plan (brittle across dialects).
+
+## Related
+
+- [How MountSQLI Works](/architecture/how-it-works/) — the pipeline.
+- [Compiler & Dialects](/architecture/compiler/) — turning the plan into SQL.
+- [RLS Policy DSL](/auth/rls/) — policies as FilterNode[].

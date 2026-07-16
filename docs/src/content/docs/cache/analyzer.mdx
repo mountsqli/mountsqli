@@ -1,0 +1,52 @@
+---
+title: Analyzer
+description: The QueryCacheAnalyzer decides what is safe to cache and builds cache keys.
+---
+
+The `QueryCacheAnalyzer` inspects a `QueryPlan` and decides whether a query is
+cacheable, and under what key. It's what keeps the cache correct by default.
+
+## What it does
+
+```ts
+import { QueryCacheAnalyzer, buildCacheKey } from "@mountsqli/cache";
+
+const analyzer = new QueryCacheAnalyzer();
+const result = analyzer.analyze(plan);
+// result.cacheable: boolean
+// result.tables: string[]  ← used as invalidation tags
+```
+
+- **`SELECT` plans** are cacheable.
+- **Writes** (insert/update/delete) are not — they're invalidation triggers.
+- The cache key is derived from the compiled SQL + params via `buildCacheKey`.
+
+## Cache key
+
+```ts
+const key = buildCacheKey(plan.table ?? "unknown", []);
+```
+
+The key incorporates the SQL text and bound parameters, so two queries with
+different params get different entries.
+
+## Why analyze at the plan level?
+
+Because the plan is structured data, the analyzer can reason about cacheability
+without parsing SQL strings. The SQL-level check happens at compile time;
+`analyzeSql` is available for raw statements.
+
+## Best practices
+
+- Trust the analyzer's `cacheable` flag; don't force-cache writes.
+- Rely on `tables` for tags rather than computing them yourself.
+
+## Common mistakes
+
+- Caching a query with non-deterministic functions (e.g. `NOW()`) — key won't change.
+- Bypassing the analyzer and hand-picking keys.
+
+## Related
+
+- [Overview](/cache/overview/) — where the analyzer runs.
+- [Tags & Invalidation](/cache/tags/) — tags come from `analyze`.

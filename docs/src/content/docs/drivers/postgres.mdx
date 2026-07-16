@@ -1,0 +1,80 @@
+---
+title: Postgres
+description: The pooled Postgres driver with $N parameters and per-call borrow().
+---
+
+`@mountsqli/driver-postgres` wraps `pg`. It uses `$N` parameter style and a
+connection pool with per-call `borrow()`.
+
+## Install & use
+
+```bash
+pnpm add @mountsqli/driver-postgres pg
+```
+
+```ts
+import "@mountsqli/driver-postgres";
+import { mountsqli } from "@mountsqli/core";
+
+const db = mountsqli({
+  driver: "postgres",
+  url: process.env.DATABASE_URL!,
+  tables: [users],
+});
+```
+
+## Parameter style
+
+The dialect compiles plans to `$N` parameters:
+
+```sql
+SELECT * FROM "users" WHERE "age" > $1
+```
+
+## Per-call borrow()
+
+`borrow()` returns a self-contained client handle. Each `query()` takes and
+releases its own pooled client — borrows never clobber each other (issue 002).
+
+```ts
+const handle = await driver.borrow();
+try {
+  await handle.query("SELECT 1", []);
+} finally {
+  await handle.release();
+}
+```
+
+## Transactions
+
+```ts
+await db.transaction(async (tx) => {
+  await tx.from(users).insert({ email: "a@b.c" });
+  // COMMIT on success, ROLLBACK on throw
+});
+```
+
+Commit failures are classified into `MountError("QUERY_FAILED")` and a rollback
+is attempted (hardening audit #8).
+
+## Best for
+
+- Production server databases.
+- Multi-instance apps (sessions via `PgTokenStore`).
+- Anything needing real concurrency.
+
+## Best practices
+
+- Set `DATABASE_URL` from env, not code.
+- Always `release()` a borrowed handle (use try/finally).
+- Use `PgTokenStore` for cross-instance sessions.
+
+## Common mistakes
+
+- Assuming `?` params (Postgres uses `$N`).
+- Forgetting to `release()` a borrowed client → pool exhaustion.
+
+## Related
+
+- [Drivers → Overview](/drivers/overview/) — driver model.
+- [Sessions](/auth/sessions/) — `PgTokenStore`.

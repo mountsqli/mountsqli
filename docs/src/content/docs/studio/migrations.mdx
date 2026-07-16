@@ -1,0 +1,41 @@
+---
+title: Migrations View
+description: See applied and pending migrations in the MountSQLI Studio.
+---
+
+The Migrations view shows migration state from `_mount_migrations`, the same
+source `migrate status` uses.
+
+## Open it
+
+1. Open Studio (`mountsqli dev`).
+2. Go to the Migrations view.
+
+## What it shows
+
+- **Applied** — migrations recorded in `_mount_migrations`.
+- **Pending** — on-disk migrations not yet applied.
+
+## Use it with the CLI
+
+The view is read-only insight. To act on it, use the CLI:
+
+```bash
+mountsqli migrate apply    # run pending
+mountsqli migrate status   # same data, in the terminal
+```
+
+## Best practices
+
+- Use the view to confirm a deploy applied everything before sign-off.
+- Pair with [`analyze`](/cli/analyze/) to catch drift.
+
+## Common mistakes
+
+- Thinking you can apply from the UI (you can't — use the CLI).
+- Confusing `:memory:` state (resets each process) with a file DB.
+
+## Related
+
+- [Migrations → Status](/migrations/status/) — the CLI equivalent.
+- [Migrations → Apply](/migrations/apply/) — run pending.

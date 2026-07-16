@@ -1,0 +1,58 @@
+{
+  "name": "@mountsqli/cli",
+  "version": "0.6.0",
+  "type": "module",
+  "description": "MountSQLI CLI: migrate generate/apply/status, dev server, api generate",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "mountsqli": "./dist/bin.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/bin.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@mountsqli/api": "workspace:*",
+    "@mountsqli/core": "workspace:*",
+    "@mountsqli/cache": "workspace:*",
+    "@mountsqli/compiler": "workspace:*",
+    "@mountsqli/driver": "workspace:*",
+    "@mountsqli/driver-mysql": "workspace:*",
+    "@mountsqli/driver-postgres": "workspace:*",
+    "@mountsqli/driver-sqlite": "workspace:*",
+    "@mountsqli/migration": "workspace:*",
+    "@mountsqli/query": "workspace:*",
+    "@mountsqli/realtime": "workspace:*",
+    "@mountsqli/schema": "workspace:*",
+    "@mountsqli/storage": "workspace:*",
+    "@mountsqli/studio": "workspace:*",
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "@types/node": "^22.0.0",
+    "vitest": "^3.2.7"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.5"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

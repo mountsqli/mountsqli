@@ -1,0 +1,66 @@
+---
+title: Deployment
+description: Deploy MountSQLI apps — Node/Bun, Docker, and config/env guidance.
+---
+
+MountSQLI is a normal Node library. Deploy it like any TypeScript backend.
+
+## Node / Bun
+
+```bash
+pnpm build      # your app
+pnpm start      # node dist/server.js
+```
+
+Use the **Postgres** or **MySQL** driver in production to avoid the Node ≥ 22.5
+requirement of the zero-dep SQLite driver (or run Node 22.5+).
+
+## Docker
+
+```dockerfile
+FROM node:22-alpine
+WORKDIR /app
+COPY . .
+RUN corepack enable && pnpm install --frozen-lockfile && pnpm build
+CMD ["node", "dist/server.js"]
+```
+
+## Environment & config
+
+Keep secrets in the environment, not in code:
+
+```ts
+const db = mountsqli({
+  driver: "postgres",
+  url: process.env.DATABASE_URL!,
+  tables: [users],
+});
+```
+
+Run migrations as a deploy step:
+
+```bash
+mountsqli migrate apply
+```
+
+## Studio is dev-only
+
+Don't expose `mountsqli dev` / Studio to the public internet. Serve your API with
+a real server; keep Studio for local use.
+
+## Best practices
+
+- Apply migrations in CI/deploy before starting the app.
+- Use `PgTokenStore` / `createPgAdapter` for sessions in production.
+- Inject a shared `RateLimiter` (Redis) for multi-instance login protection.
+
+## Common mistakes
+
+- Deploying with the SQLite `:memory:` driver (data lost on restart).
+- Exposing Studio publicly.
+
+## Related
+
+- [Drivers → Postgres](/drivers/postgres/) — production DB.
+- [Sessions](/auth/sessions/) — production token store.
+- [Testing](/operations/testing/) — how to verify before deploy.

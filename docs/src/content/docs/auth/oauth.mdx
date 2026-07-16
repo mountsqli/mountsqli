@@ -1,0 +1,102 @@
+---
+title: OAuth & Providers
+description: The NextAuth-style MountAuth framework — providers, CSRF + PKCE, and session cookies.
+---
+import { Aside } from '@astrojs/starlight/components';
+
+
+`MountAuth` (`createAuth`) drives the OAuth authorization-code flow with **CSRF
++ PKCE** built in. It mirrors NextAuth's shape: providers, callbacks, events,
+and stateless JWT sessions in HTTP-only cookies.
+
+## Providers
+
+| Provider | Type |
+| --- | --- |
+| `GoogleProvider` | oauth (PKCE) |
+| `GitHubProvider` | oauth (PKCE) |
+| `DiscordProvider` | oauth |
+| `TwitterProvider` | oauth |
+| `CredentialsProvider` | credentials |
+
+## Create the auth instance
+
+```ts
+import { createAuth, GoogleProvider } from "@mountsqli/auth";
+
+const auth = createAuth({
+  jwt: { secret: "..." },
+  providers: [GoogleProvider({ clientId, clientSecret })],
+});
+```
+
+## The OAuth flow (two routes)
+
+### Step 1 — redirect
+
+Sets a `mountsqli.csrf-token` + `mountsqli.pkce-verifier` HttpOnly cookie, then
+returns the provider URL:
+
+```ts
+const url = await auth.getAuthorizationUrl("google", res);
+// res gets the two cookies; redirect the user to `url`
+```
+
+### Step 2 — callback
+
+Verifies the callback `state` matches the cookie (login-CSRF guard) and supplies
+the PKCE verifier. Returns `null` on mismatch:
+
+```ts
+const result = await auth.handleCallback("google", code, state, req.headers, res);
+// → { user, token } | null
+```
+
+<Aside type="caution" title="Login-CSRF is closed">
+A callback with a mismatched or missing `state` is rejected. The `state` is bound
+to the session cookie and PKCE `code_verifier`/`code_challenge` are wired for
+providers that support it (Google, GitHub). This closes the classic
+authorization-code injection attack (audit #4).
+</Aside>
+
+## Credentials (email + password)
+
+```ts
+const auth = createAuth({
+  jwt: { secret: "..." },
+  providers: [
+    CredentialsProvider({
+      credentials: { email: { label: "Email", type: "email" }, password: { label: "Password", type: "password" } },
+      authorize: async (c) => {
+        const user = await lookup(c.email);
+        if (!user || !(await verifyPassword(user.hash, c.password))) return null;
+        return { id: user.id, email: user.email };
+      },
+    }),
+  ],
+});
+```
+
+## Cookies & callbacks
+
+- Sessions are stateless JWTs in HTTP-only cookies (`setSessionCookie` /
+  `clearSessionCookie`).
+- Callbacks (`signIn`, `redirect`, `jwt`, `session`) and events (`createUser`,
+  `signIn`) mirror NextAuth.
+- For Postgres-backed storage, pass `createPgAdapter(...)` as `adapter`.
+
+## Best practices
+
+- Keep `MountAuth` out of the hot path — verify with `verifyPassword` + `signJwt`.
+- Store the JWT secret in an env var, not code.
+- Enable `rateLimit` on the credentials provider.
+
+## Common mistakes
+
+- Ignoring a `null` result from `handleCallback` (means CSRF/PKCE failed).
+- Using `MemoryTokenStore` in production (use `createPgAdapter`).
+
+## Related
+
+- [Sessions](/auth/sessions/) — the `TokenStore` behind adapters.
+- [Passwords & JWT](/auth/passwords-jwt/) — the crypto primitives.

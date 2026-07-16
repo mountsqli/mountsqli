@@ -1,0 +1,64 @@
+---
+title: Contributing
+description: How to contribute to MountSQLI — repo layout, conventions, and the PR flow.
+---
+
+MountSQLI is a pnpm monorepo. Contributions follow a few conventions.
+
+## Repo layout
+
+```
+mountsqli/           (pnpm workspace)
+├─ packages/         # schema, compiler, driver*, query, migration, auth, ...
+├─ examples/         # mount-app, express-app, cli-demo
+└─ docs/             # this documentation (Astro Starlight)
+```
+
+## Conventions
+
+- **ESM-only** in every package.
+- **Drivers are thin** — implement `Driver` + a `Dialect`; no query logic.
+- **Queries are data** — add capabilities as `QueryPlan` nodes, not driver methods.
+- **Types are the API** — keep runtime code free of `any` in exported signatures.
+- **Migrations are pure-then-applied** — diff/generate are pure; only `Migrator` touches the DB.
+- **No generators, decorators, or bespoke DSL.**
+
+## Local setup
+
+```bash
+pnpm install
+pnpm --filter @mountsqli/<pkg> typecheck
+pnpm --filter @mountsqli/<pkg> test
+```
+
+CI runs `build → typecheck → test` on Node 24 for every push/PR.
+
+## Adding a feature
+
+1. Add the capability as a `QueryPlan` node in `@mountsqli/compiler`.
+2. Wire the builder method in `@mountsqli/query`.
+3. Translate it in each dialect/driver.
+4. Add a regression test (real driver preferred).
+5. Document it under the right docs folder.
+
+## Documentation
+
+Docs live in `docs/` as Markdown. Follow the existing structure: one concept per
+page, frontmatter `title` + `description`, a Related section, and links to
+neighbors. Build with `pnpm --filter docs build`.
+
+## Best practices
+
+- Keep all `@mountsqli/*` packages on the same version when releasing.
+- Add a regression test for every bug fix (see `issues/`).
+- Update `CLAUDE.md` and docs when behavior changes.
+
+## Common mistakes
+
+- Putting query logic in a driver (it belongs in the compiler/IR).
+- Forgetting the `build` before `test` (tests resolve types from built `dist`).
+
+## Related
+
+- [Roadmap](/reference/roadmap/) — what's next.
+- [Architecture → How It Works](/architecture/how-it-works/) — the model.

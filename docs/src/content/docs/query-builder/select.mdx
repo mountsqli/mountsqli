@@ -1,0 +1,88 @@
+---
+title: Select
+description: Read rows with the MountSQLI query builder — select, findOne, all, findMany, and columns.
+---
+import { Aside } from '@astrojs/starlight/components';
+
+
+`select` builds a `QueryPlan` for reading rows. Nothing runs until you call a
+terminal method like `.findOne()` or `.all()`.
+
+## Basic select
+
+```ts
+const users = defineTable("users", {
+  id: int().pk(),
+  email: text().notNull(),
+  age: int(),
+});
+
+const all = await db.from(users).all();
+//   ^? { id: number; email: string; age: number | null }[]
+```
+
+## Pick one row
+
+```ts
+const one = await db.from(users).where("id", "=", 1).findOne();
+//   ^? User | null
+```
+
+`findOne()` returns the first matching row or `null`.
+
+## Select specific columns
+
+```ts
+const rows = await db.from(users).select("id", "email").all();
+//   ^? { id: number; email: string }[]
+```
+
+## Eager-load relations
+
+Use `findMany({ with: {...} })` to nest related rows:
+
+```ts
+const posts = await db.from(postsTable).findMany({
+  with: { author: true },
+});
+// each post has an `author` field
+```
+
+## How it compiles
+
+```ts
+db.from(users).where("age", ">", 18)._plan;
+// → { op: "select", table: "users", where: [{ kind: "filter", column: "age", op: ">", value: 18 }] }
+```
+
+The dialect turns that into `SELECT * FROM "users" WHERE "age" > ?`.
+
+<Aside type="note" title="Immutable">
+Each method returns a new builder. Reusing a builder after calling a terminal
+method is safe — the plan is never mutated in place.
+</Aside>
+
+## Real-world example
+
+```ts
+export async function listEmails() {
+  return db.from(users).select("email").orderBy("email", "asc").all();
+}
+```
+
+## Best practices
+
+- Use `findOne()` when you expect zero or one row; `all()` for many.
+- Select only the columns you need for large tables.
+- Let `InferTable` type the result — don't annotate manually.
+
+## Common mistakes
+
+- Forgetting the terminal call — `where(...)` alone does not run.
+- Using `any` for the result instead of the inferred row type.
+
+## Related
+
+- [Filtering](/query-builder/filtering/) — every `where` operator.
+- [Ordering & Pagination](/query-builder/ordering/) — sort and page results.
+- [Raw SQL & RLS Gate](/query-builder/raw-sql/) — `selectExpr`.

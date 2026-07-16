@@ -1,0 +1,72 @@
+---
+title: RBAC
+description: Role-based access control with the Rbac class — grants, wildcards, and can().
+---
+
+`Rbac` maps roles to permissions and answers "can this role do X?".
+
+## Define grants
+
+```ts
+import { Rbac } from "@mountsqli/auth";
+
+const rbac = new Rbac()
+  .define({ name: "reader", permissions: ["posts:read"] })
+  .define({ name: "writer", permissions: ["posts:write", "posts:*"] });
+```
+
+## Check permissions
+
+```ts
+rbac.can(["reader"], "posts:read");      // true
+rbac.can(["reader"], "posts:write");     // false
+rbac.can(["writer"], "posts:delete");    // true  (posts:* matches)
+```
+
+Use `canWildcard` for `*` patterns:
+
+```ts
+rbac.canWildcard(["writer"], "posts:anything"); // true
+```
+
+## Integrate with Auth
+
+Pass an `Rbac` into the `Auth` facade to check user roles:
+
+```ts
+const auth = new Auth({ jwtKey: "secret", rbac });
+auth.can(["admin"], "users:write"); // true/false
+```
+
+## Permission shape
+
+Permissions are strings, conventionally `"resource:action"`. Wildcards use `*`:
+
+- `posts:*` — every action on posts
+- `*` — everything
+
+## Real-world example
+
+```ts
+function requirePermission(user: AuthedUser, permission: string) {
+  if (!rbac.canWildcard(user.roles, permission)) {
+    throw new MountError("FORBIDDEN", "Missing permission");
+  }
+}
+```
+
+## Best practices
+
+- Define roles once; reference them by name everywhere.
+- Use `*` sparingly — prefer explicit permissions.
+- Evaluate RBAC after authentication, not instead of it.
+
+## Common mistakes
+
+- Using `can` when you meant `canWildcard` (no `*` expansion).
+- Putting authorization checks in handlers instead of a middleware.
+
+## Related
+
+- [RLS Policy DSL](/auth/rls/) — data-level (row) authorization.
+- [Sessions](/auth/sessions/) — the `Auth` facade that holds the `Rbac`.

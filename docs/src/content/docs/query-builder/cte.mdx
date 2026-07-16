@@ -1,0 +1,87 @@
+---
+title: CTE & Subqueries
+description: Build WITH clauses and UNION queries with the MountSQLI builder.
+---
+import { Aside } from '@astrojs/starlight/components';
+
+
+Common Table Expressions (CTEs) and `UNION` let you compose queries without
+string SQL. MountSQLI compiles both into the `QueryPlan`.
+
+## WITH (CTE)
+
+`.with(name, queryBuilder)` defines a named CTE; the outer query can reference it.
+
+```ts
+const recent = db.from(orders).where("createdAt", ">", "2024-01-01");
+const q = db
+  .from(orders)
+  .with("recent", recent)
+  .select("customerId")
+  .sum("total", "totalSpent")
+  .groupBy("customerId")
+  .all();
+// → WITH "recent" AS (SELECT * FROM "orders" WHERE "createdAt" > ?)
+//    SELECT "customerId", SUM("total") AS "totalSpent" FROM "recent" GROUP BY "customerId"
+```
+
+## UNION / UNION ALL
+
+`.union(otherBuilder)` combines two queries:
+
+```ts
+const active = db.from(users).where("active", "=", true);
+const vip = db.from(users).where("tier", "=", "vip");
+
+const rows = await active.union(vip).all();
+// → SELECT * FROM "users" WHERE "active" = ? UNION SELECT * FROM "users" WHERE "tier" = ?
+```
+
+<Aside type="note" title="Column shape">
+Both sides of a `union` must return compatible columns. The result type follows
+the left side.
+</Aside>
+
+## Subqueries in filters
+
+```ts
+db.from(users).whereExists(
+  db.from(orders).where("customerId", "=", "users.id"),
+);
+```
+
+## Real-world example
+
+Recent orders with a running total per customer:
+
+```ts
+export async function runningTotals() {
+  const recent = db.from(orders).where("createdAt", ">", "2024-01-01");
+  return db
+    .from(orders)
+    .with("recent", recent)
+    .window("running", {
+      fn: "SUM",
+      column: "total",
+      partitionBy: ["customerId"],
+      orderBy: [{ column: "createdAt", dir: "asc" }],
+    })
+    .all();
+}
+```
+
+## Best practices
+
+- Use CTEs to make complex queries readable and reusable.
+- Prefer `union` over ORing disparate conditions when shapes align.
+- Reference CTEs by name in `select`/`join`.
+
+## Common mistakes
+
+- Returning mismatched columns from `union` sides.
+- Forgetting the CTE must be defined before it is referenced.
+
+## Related
+
+- [Window Functions](/query-builder/window-functions/) — pair with CTEs.
+- [Filtering](/query-builder/filtering/) — `whereExists`.

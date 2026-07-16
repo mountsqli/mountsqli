@@ -1,0 +1,83 @@
+---
+title: Window Functions
+description: Rank, number, and compare rows within partitions using SQL window functions.
+---
+
+Window functions compute a value across a set of rows related to the current
+row. MountSQLI compiles `ROW_NUMBER`, `RANK`, `DENSE_RANK`, `LAG`, `LEAD`,
+`FIRST_VALUE`, `LAST_VALUE`, and `NTILE` with `PARTITION BY` / `ORDER BY` / frames.
+
+## Row number per group
+
+```ts
+db.from(orders)
+  .window("rn", { fn: "ROW_NUMBER", partitionBy: ["customerId"], orderBy: [{ column: "total", dir: "desc" }] })
+  .all();
+// → ROW_NUMBER() OVER (PARTITION BY "customerId" ORDER BY "total" DESC) AS "rn"
+```
+
+## Rank and dense rank
+
+```ts
+.window("rank", { fn: "RANK", orderBy: [{ column: "score", dir: "desc" }] })
+.window("dense", { fn: "DENSE_RANK", orderBy: [{ column: "score", dir: "desc" }] })
+```
+
+## Lag and lead
+
+Compare a row to its neighbors:
+
+```ts
+.window("prevTotal", { fn: "LAG", column: "total", orderBy: [{ column: "createdAt", dir: "asc" }] })
+.window("nextTotal", { fn: "LEAD", column: "total", orderBy: [{ column: "createdAt", dir: "asc" }] })
+```
+
+## First / last value and NTILE
+
+```ts
+.window("first", { fn: "FIRST_VALUE", column: "total", orderBy: [{ column: "createdAt", dir: "asc" }] })
+.window("bucket", { fn: "NTILE", value: 4, orderBy: [{ column: "score", dir: "desc" }] })
+```
+
+## Frames
+
+Add a frame to control the window range:
+
+```ts
+.window("running", {
+  fn: "SUM",
+  column: "total",
+  orderBy: [{ column: "createdAt", dir: "asc" }],
+  frame: { type: "ROWS", start: "UNBOUNDED PRECEDING", end: "CURRENT ROW" },
+})
+```
+
+## Real-world example
+
+Top order per customer:
+
+```ts
+export async function topOrderPerCustomer() {
+  const rows = await db
+    .from(orders)
+    .window("rn", { fn: "ROW_NUMBER", partitionBy: ["customerId"], orderBy: [{ column: "total", dir: "desc" }] })
+    .all();
+  return rows.filter((r) => r.rn === 1);
+}
+```
+
+## Best practices
+
+- Use `partitionBy` to reset the window per group (e.g. per customer).
+- Always `orderBy` inside the window — window order is not the query order.
+- Compute ranking in SQL; don't sort and number in app code.
+
+## Common mistakes
+
+- Forgetting `orderBy` in the window — the function has no defined order.
+- Expecting `where()` to filter window results — filter after with a subquery.
+
+## Related
+
+- [Aggregates](/query-builder/aggregates/) — single-value aggregates.
+- [CTE & Subqueries](/query-builder/cte/) — wrap window results in a CTE.

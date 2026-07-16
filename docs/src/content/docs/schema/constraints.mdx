@@ -1,0 +1,114 @@
+---
+title: Constraints & Defaults
+description: Primary keys, uniqueness, foreign keys, checks, and column defaults in MountSQLI.
+---
+import { Aside } from '@astrojs/starlight/components';
+
+
+Constraints and defaults are declared on column builders or on the table. They
+are emitted as DDL when you generate migrations.
+
+## Primary key
+
+Chain `.pk()`. A single `.pk()` column is the table's primary key.
+
+```ts
+const users = defineTable("users", {
+  id: int().pk(), // auto-increment integer PK
+});
+```
+
+For a composite key, set it at the table level instead:
+
+```ts
+defineTable("memberships", { userId: int(), teamId: int() }, {
+  primaryKey: ["userId", "teamId"],
+});
+```
+
+## Not null
+
+Columns are nullable unless you chain `.notNull()`:
+
+```ts
+email: text().notNull(),
+```
+
+## Unique
+
+Chain `.unique()` on a column, or declare a multi-column unique group:
+
+```ts
+// single column
+email: text().notNull().unique(),
+
+// composite group (table option)
+defineTable("memberships", { userId: int(), teamId: int() }, {
+  unique: [["userId", "teamId"]],
+});
+```
+
+## Foreign key
+
+Chain `.references(targetTable, targetColumn, opts?)`:
+
+```ts
+ownerId: int().notNull().references("users", "id", { onDelete: "CASCADE" }),
+```
+
+Options:
+
+| Option | Effect |
+| --- | --- |
+| `onDelete` | `CASCADE`, `SET NULL`, `RESTRICT`, … |
+| `onUpdate` | same semantics on update |
+
+## Check
+
+Chain `.check(expr)` for a column-level `CHECK`:
+
+```ts
+age: int().check("age >= 0"),
+```
+
+Table-level checks go in the options:
+
+```ts
+defineTable("accounts", { balance: real() }, { checks: ["balance >= 0"] });
+```
+
+## Defaults
+
+Use `.default(value)` for a literal, or `.defaultNow()` for `CURRENT_TIMESTAMP`:
+
+```ts
+active: bool().notNull().default(true),
+createdAt: timestamp().notNull().defaultNow(),
+```
+
+<Aside type="tip" title="SQL-level, not JS-level">
+`defaultNow()` emits `CURRENT_TIMESTAMP` in the DDL — the database sets it, not
+your app. `.default(true)` stores the literal `1` (booleans are 0/1).
+</Aside>
+
+Use `.onUpdate(expr)` to set a column on every update:
+
+```ts
+updatedAt: timestamp().notNull().defaultNow().onUpdate(),
+```
+
+## Best practices
+
+- Put referential integrity in `.references()` so migrations create the FK.
+- Prefer `defaultNow()` over setting timestamps in app code.
+- Use composite `unique` groups for join tables.
+
+## Common mistakes
+
+- Forgetting `.notNull()` on a FK column — it becomes nullable.
+- Using `.default(new Date())` (JS value) when you meant `.defaultNow()`.
+
+## Related
+
+- [Column Types](/schema/column-types/) — type mappings behind each column.
+- [Migrations → Generate](/migrations/generate/) — how constraints become DDL.

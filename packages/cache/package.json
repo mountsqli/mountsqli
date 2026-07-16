@@ -1,0 +1,35 @@
+{
+  "name": "@mountsqli/cache",
+  "version": "0.6.0",
+  "type": "module",
+  "description": "MountSQLI intelligent multi-level caching subsystem — L1/L2/L3, automatic invalidation, AI-driven optimization",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@mountsqli/compiler": "workspace:*",
+    "@mountsqli/driver": "workspace:*",
+    "@mountsqli/schema": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^3.0.0",
+    "@types/node": "^22.0.0"
+  }
+}

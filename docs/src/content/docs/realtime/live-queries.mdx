@@ -1,0 +1,67 @@
+---
+title: Live Queries
+description: Subscribe to query results that update automatically when the data changes.
+---
+
+`LiveQuery` runs a query and pushes updates whenever the underlying data
+changes. Great for dashboards and feeds.
+
+## Create a live query
+
+```ts
+import { Hub, LiveQuery } from "@mountsqli/realtime";
+
+const hub = new Hub();
+const live = new LiveQuery(hub, db.from(orders).where("status", "=", "open"));
+
+const unsub = live.subscribe((change) => {
+  console.log("orders changed:", change);
+});
+
+await live.start();
+```
+
+## How it updates
+
+When a write touches a table the query depends on, the `Hub` notifies the
+`LiveQuery`, which re-runs and publishes a `LiveChange` diff.
+
+```ts
+type LiveChange<T> = {
+  type: "insert" | "update" | "delete";
+  row: T;
+  snapshot: T[];
+};
+```
+
+## Stop listening
+
+```ts
+unsub.unsubscribe(); // stops the live query
+```
+
+## Real-world example
+
+A live orders board:
+
+```ts
+const live = new LiveQuery(hub, db.from(orders).orderBy("createdAt", "desc"));
+live.subscribe((change) => renderBoard(change.snapshot));
+await live.start();
+```
+
+## Best practices
+
+- Scope live queries narrowly (filter + limit) — they re-run on writes.
+- Unsubscribe on unmount to free the subscription.
+- Pair with `PresenceChannel` for collaborative views.
+
+## Common mistakes
+
+- Live-querying an unfiltered, huge table — every write re-scans it.
+- Forgetting `start()` — no updates arrive.
+
+## Related
+
+- [Presence](/realtime/presence/) — who's viewing.
+- [Cache](/cache/overview/) — pair with query caching for read scaling.

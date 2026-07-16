@@ -1,0 +1,82 @@
+---
+title: Why MountSQLI?
+description: The five design principles that make MountSQLI different, and what you gain from each.
+---
+import { Aside } from '@astrojs/starlight/components';
+
+
+MountSQLI is built on five principles. Each one is a decision that trades away
+some convenience for safety, size, or speed.
+
+## 1. Native SQL first
+
+The builder is a **typed view over SQL**, not a replacement for it. When you
+write `where("email", "=", x)`, you are writing SQL — just checked by TypeScript.
+
+```ts
+// This is SQL. You can read it.
+db.from(users).where("age", ">", 18).orderBy("createdAt", "desc");
+// → SELECT * FROM "users" WHERE "age" > ? ORDER BY "createdAt" DESC
+```
+
+**Why it matters:** you never outgrow the abstraction. Anything SQL can do, the
+builder can express — and when it can't, the guarded raw-SQL helpers can.
+
+## 2. Type-safe everything
+
+If a query can be checked at compile time, it is. Wrong column? Wrong operator?
+Wrong nullability? Those are **type errors**, not runtime crashes.
+
+```ts
+db.from(users).where("emial", "=", "x");
+//                   ^^^^ Type error: no column named "emial"
+```
+
+**Why it matters:** bugs that would reach production in other ORMs fail at `tsc`.
+
+## 3. Zero runtime cost where possible
+
+Queries are **data** (`QueryPlan`), not objects with methods mutating `this`.
+The builder is immutable and shares structure between copies. There is no
+per-row object graph on the read path.
+
+**Why it matters:** MountSQLI tree-shakes to the features you use and runs on
+edge runtimes where allocation budgets are tight.
+
+<Aside type="note" title="Immutable by default">
+Every builder method returns a new builder. `returning()` on a transaction
+builder forks a copy — it never mutates the original. A regression test guards
+this (issue 001).
+</Aside>
+
+## 4. Compile-time validation
+
+No code generators, no decorators, no bespoke schema language. Your schema is
+plain TypeScript, and types are inferred from it.
+
+```ts
+const users = defineTable("users", { id: int().pk(), email: text().notNull() });
+type User = InferTable<typeof users>; // { id: number; email: string }
+```
+
+**Why it matters:** nothing to run before you code. No `prisma generate` step.
+
+## 5. AI native
+
+Any AI-generated SQL or code goes through the **same compiler validator** as
+your hand-written input. The `ai` package turns natural language into a
+`QueryPlan`, not a raw string.
+
+**Why it matters:** generated queries are type-checked and injection-safe, just
+like yours.
+
+## Less code, more work
+
+Every public API is measured against its Prisma/Drizzle/TypeORM equivalent. If a
+feature is not shorter or safer, it does not ship.
+
+## Related
+
+- [Introduction](/getting-started/introduction/) — the one-paragraph version.
+- [Core Concepts](/getting-started/core-concepts/) — how the compiler fits together.
+- [Type-Safety System](/architecture/type-safety/) — how inference works internally.

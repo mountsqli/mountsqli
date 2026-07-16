@@ -1,0 +1,65 @@
+---
+title: Apply
+description: Run pending migrations against your database with mountsqli migrate apply.
+---
+
+`migrate apply` runs pending migrations and records each in `_mount_migrations`.
+It runs inside a transaction per step.
+
+## Syntax
+
+```bash
+mountsqli migrate apply
+```
+
+## What it does
+
+1. Loads the on-disk migrations (the known set).
+2. Diffs them against `_mount_migrations` to find pending steps.
+3. Applies each pending step in a transaction.
+4. Records the step on success.
+
+## Example output
+
+```text
+$ mountsqli migrate apply
+Applying 2026-07-16T12-00-00_add_posts.sql ... done
+Applied 1 migration.
+```
+
+## Options
+
+| Flag | Effect |
+| --- | --- |
+| `--dir <path>` | override the migrations directory |
+| `--dry-run` | print SQL without executing |
+
+## In code
+
+You can drive the `Migrator` directly:
+
+```ts
+import { Migrator } from "@mountsqli/migration";
+
+const migrator = new Migrator(driver, migrationsDir);
+const { pending } = await migrator.status(knownSteps);
+for (const step of pending) {
+  await migrator.apply(step);
+}
+```
+
+## Best practices
+
+- Run `apply` in CI or a deploy hook, not from a request path.
+- Use `--dry-run` to preview in production-like environments.
+- Keep a backup before applying destructive alters.
+
+## Common mistakes
+
+- Applying against `:memory:` — `_mount_migrations` vanishes on exit.
+- Expecting `status` to show pending without passing known steps (it won't).
+
+## Related
+
+- [Status](/migrations/status/) — see what is pending.
+- [Generate](/migrations/generate/) — create the migration first.

@@ -1,0 +1,63 @@
+---
+title: Compiler & Dialects
+description: How compilePlan turns a QueryPlan into SQL with bound parameters — and why it is injection-safe.
+---
+
+The compiler turns a `QueryPlan` into `{ sql, params, columnTypes }`. A **Dialect**
+decides the SQL dialect and parameter style.
+
+## compilePlan
+
+```ts
+import { compilePlan } from "@mountsqli/compiler";
+
+const { sql, params } = compilePlan(plan, "postgres");
+// sql:  SELECT * FROM "users" WHERE "age" > $1
+// params: [18]
+```
+
+## Parameter style per dialect
+
+| Dialect | Placeholder |
+| --- | --- |
+| `sqlite` | `?` |
+| `mysql` | `?` |
+| `postgres` | `$1`, `$2`, … |
+
+## Injection-safe by construction
+
+`compilePlan` **never string-concatenates values**. Every value becomes a bound
+parameter. This is a structural guarantee:
+
+```ts
+db.from(users).where("email", "=", userInput);
+// → WHERE "email" = ?   (userInput is a param, never inlined)
+```
+
+Even raw-SQL hatches (`selectExpr`/`whereExpr`) reject `;`, `--`, and `/*` at
+build time.
+
+## Other compiler phases
+
+- `optimize(plan)` — rewrites the plan for better SQL.
+- `suggestIndexes(plan)` — proposes indexes (powers `mountsqli analyze`).
+
+## Dialects are config-only
+
+Switching databases changes the dialect, not your code. The same plan runs on
+SQLite, Postgres, or MySQL.
+
+## Best practices
+
+- Trust the compiler for parameterization — don't inline values.
+- Use `compilePlan` in tests to assert SQL shape per dialect.
+
+## Common mistakes
+
+- Manually building SQL strings instead of relying on `compilePlan`.
+- Forgetting the dialect arg (defaults to sqlite).
+
+## Related
+
+- [QueryPlan IR](/architecture/queryplan/) — the input.
+- [Query Execution](/architecture/execution/) — the output runs on a driver.

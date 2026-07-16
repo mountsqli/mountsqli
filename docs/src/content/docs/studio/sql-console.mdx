@@ -1,0 +1,41 @@
+---
+title: SQL Console
+description: Run ad-hoc SQL through the driver in the MountSQLI Studio.
+---
+import { Aside } from '@astrojs/starlight/components';
+
+
+The SQL Console lets you run SQL directly. Queries are routed through the
+`Driver`, so parameter style and quoting match your configured dialect.
+
+## Run a query
+
+1. Open Studio → SQL Console.
+2. Type SQL, e.g. `SELECT * FROM users WHERE age > 18;`
+3. Run it; results render as a grid.
+
+## Bound parameters
+
+The console supports bound parameters the same way the builder does. Values are
+sent as parameters, not concatenated.
+
+<Aside type="caution" title="Raw access">
+The console runs arbitrary SQL against your dev database. Destructive statements
+(`DROP`, `DELETE` without `WHERE`) execute for real. Use it like you would a
+`psql` / `sqlite3` shell.
+</Aside>
+
+## Best practices
+
+- Use the console to prototype a query, then move it into a typed builder call.
+- Prefer the builder in app code — the console is for exploration.
+
+## Common mistakes
+
+- Running a `DELETE` without `WHERE` in the console — it deletes real rows.
+- Assuming console SQL is type-checked (it isn't — that's the builder's job).
+
+## Related
+
+- [Data Browser](/studio/data-browser/) — grid editing.
+- [Query Builder → Raw SQL](/query-builder/raw-sql/) — guarded raw SQL in code.

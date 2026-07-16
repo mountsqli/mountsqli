@@ -1,0 +1,42 @@
+{
+  "name": "@mountsqli/migration",
+  "version": "0.6.0",
+  "type": "module",
+  "description": "MountSQLI migration engine: diff, generate SQL, introspect, apply/rollback",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@mountsqli/compiler": "workspace:*",
+    "@mountsqli/driver": "workspace:*",
+    "@mountsqli/schema": "workspace:*"
+  },
+  "devDependencies": {
+    "vitest": "^3.0.0",
+    "@types/node": "^22.0.0",
+    "@mountsqli/driver-sqlite": "workspace:*"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.5"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

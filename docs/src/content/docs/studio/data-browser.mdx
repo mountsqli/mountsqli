@@ -1,0 +1,46 @@
+---
+title: Data Browser
+description: Browse, filter, and edit table rows in the MountSQLI Studio.
+---
+import { Aside } from '@astrojs/starlight/components';
+
+
+The Data Browser shows your tables as editable grids. It reads through the same
+`Driver` your app uses, so what you see matches production shape.
+
+## Browse rows
+
+1. Open Studio (`mountsqli dev`).
+2. Pick a table from the sidebar.
+3. View rows in a grid; page with the controls.
+
+## Filter and sort
+
+Use the column headers to sort, and the filter box to scope rows. Under the hood
+this builds the same `QueryPlan` your builder would.
+
+## Edit data
+
+- **Insert** a row with the add button.
+- **Edit** a cell inline and save.
+- **Delete** a row with the row action.
+
+<Aside type="note" title="Edits go through the driver">
+Studio writes use the same insert/update/delete paths as your code — including
+any RLS enforcement configured on the `Driver`.
+</Aside>
+
+## Best practices
+
+- Use the browser to verify a migration's result quickly.
+- Don't use it as a production admin panel — it's a dev tool.
+
+## Common mistakes
+
+- Editing data expecting it to generate a migration (it doesn't).
+- Forgetting RLS may block edits if enforcement is on.
+
+## Related
+
+- [SQL Console](/studio/sql-console/) — ad-hoc queries.
+- [Overview](/studio/overview/) — what Studio includes.

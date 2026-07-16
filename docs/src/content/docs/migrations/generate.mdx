@@ -1,0 +1,84 @@
+---
+title: Generate
+description: Create migration files from schema changes with mountsqli migrate generate.
+---
+
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+`migrate generate` diffs your code-defined tables against the live database and
+writes a SQL migration file. It does **not** apply it.
+
+## Syntax
+
+```bash
+mountsqli migrate generate
+```
+
+The CLI auto-detects `mountsqli.config.*` from the current directory.
+
+## What it does
+
+1. Reads your tables from the config.
+2. Introspects the live database (or an empty schema on first run).
+3. Diffs the two and generates `CREATE` / `ALTER` / `DROP` statements.
+4. Writes a timestamped migration file to your migrations directory.
+
+## Example output
+
+```text
+$ mountsqli migrate generate
+Created migration: migrations/2026-07-16T12-00-00_add_posts.sql
+```
+
+```sql
+-- migrations/2026-07-16T12-00-00_add_posts.sql
+CREATE TABLE "posts" (
+  "id" INTEGER PRIMARY KEY,
+  "title" TEXT NOT NULL,
+  "body" TEXT
+);
+```
+
+## Options
+
+| Flag | Effect |
+| --- | --- |
+| `--name <n>` | set a custom migration name |
+| `--dir <path>` | override the migrations directory |
+
+Run it with your package manager:
+
+<Tabs>
+  <TabItem label="npm">
+    ```bash
+    npx mountsqli migrate generate
+    ```
+  </TabItem>
+  <TabItem label="pnpm">
+    ```bash
+    pnpm mountsqli migrate generate
+    ```
+  </TabItem>
+  <TabItem label="bun">
+    ```bash
+    bunx mountsqli migrate generate
+    ```
+  </TabItem>
+</Tabs>
+
+## Best practices
+
+- Generate after every schema change, before committing.
+- Review the SQL — destructive `DROP`/`ALTER` is shown explicitly.
+- Keep one logical change per migration for easy rollback reasoning.
+
+## Common mistakes
+
+- Generating against `:memory:` — nothing persists, so diffs are always full creates.
+- Forgetting to commit the generated file.
+
+## Related
+
+- [Apply](/migrations/apply/) — run the generated migration.
+- [How Migrations Work](/migrations/how/) — the diff model.

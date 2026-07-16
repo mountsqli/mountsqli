@@ -1,0 +1,45 @@
+{
+  "name": "mount-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "seed": "tsx src/seed.ts",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mountsqli/ai": "workspace:*",
+    "@mountsqli/auth": "workspace:*",
+    "@mountsqli/cache": "workspace:*",
+    "@mountsqli/compiler": "workspace:*",
+    "@mountsqli/core": "workspace:*",
+    "@mountsqli/driver": "workspace:*",
+    "@mountsqli/driver-postgres": "workspace:*",
+    "@mountsqli/query": "workspace:*",
+    "@mountsqli/realtime": "workspace:*",
+    "@mountsqli/schema": "workspace:*",
+    "@mountsqli/storage": "workspace:*",
+    "dotenv": "^17.4.2",
+    "ioredis": "^5.11.1",
+    "next": "16.2.10",
+    "pg": "^8.22.0",
+    "react": "19.2.4",
+    "react-dom": "19.2.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/pg": "^8.11.0",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "babel-plugin-react-compiler": "1.0.0",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.10",
+    "tailwindcss": "^4",
+    "tsx": "^4.19.0",
+    "typescript": "^5"
+  }
+}

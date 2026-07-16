@@ -1,0 +1,69 @@
+---
+title: Update
+description: Update rows with update() and returning() — filtered by where().
+---
+import { Aside } from '@astrojs/starlight/components';
+
+
+`update()` modifies matching rows. Pair it with `where()` to scope the update.
+
+## Update with a filter
+
+```ts
+await db.from(users).where("id", "=", 1).update({ age: 37 });
+```
+
+## Update without a filter (all rows)
+
+Omit `where()` to update every row:
+
+```ts
+await db.from(users).update({ active: true });
+```
+
+<Aside type="danger" title="No filter = all rows">
+Without `where()`, `update()` changes every row in the table. This is allowed by
+design — double-check before running it.
+</Aside>
+
+## Read back with returning()
+
+```ts
+const { rows } = await db
+  .from(users)
+  .where("id", "=", 1)
+  .returning("email")
+  .update({ age: 37 });
+```
+
+## How it compiles
+
+```ts
+db.from(users).where("id", "=" , 1).update({ age: 37 });
+// → UPDATE "users" SET "age" = ? WHERE "id" = ?
+```
+
+## Real-world example
+
+```ts
+export async function renameUser(id: number, email: string) {
+  await db.from(users).where("id", "=", id).update({ email });
+}
+```
+
+## Best practices
+
+- Always add `where()` unless you mean to update the whole table.
+- Use `returning()` to confirm what changed.
+- Bind values — MountSQLI never interpolates them.
+
+## Common mistakes
+
+- Forgetting `where()` and updating all rows.
+- Reusing a builder after a terminal call expecting more chaining.
+
+## Related
+
+- [Insert](/query-builder/insert/) — add new rows.
+- [Delete](/query-builder/delete/) — remove rows.
+- [Filtering](/query-builder/filtering/) — scope the update.

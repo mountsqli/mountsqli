@@ -1,0 +1,114 @@
+---
+title: Installation
+description: Install MountSQLI with npm, pnpm, yarn, or bun — and pick the driver you need.
+---
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+
+
+MountSQLI is a pnpm monorepo, but you install it like any other package. The
+core package re-exports the tree-shakeable surface; driver packages are added
+separately.
+
+## Install the core
+
+<Tabs>
+  <TabItem label="npm">
+    ```bash
+    npm install @mountsqli/core
+    ```
+  </TabItem>
+  <TabItem label="pnpm">
+    ```bash
+    pnpm add @mountsqli/core
+    ```
+  </TabItem>
+  <TabItem label="yarn">
+    ```bash
+    yarn add @mountsqli/core
+    ```
+  </TabItem>
+  <TabItem label="bun">
+    ```bash
+    bun add @mountsqli/core
+    ```
+  </TabItem>
+</Tabs>
+
+## Install a driver
+
+Pick the driver for your database. Each driver self-registers on import.
+
+<Tabs>
+  <TabItem label="SQLite (zero-dep)">
+    ```bash
+    pnpm add @mountsqli/driver-sqlite
+    ```
+    Uses Node's built-in `node:sqlite`. **Requires Node ≥ 22.5.**
+  </TabItem>
+  <TabItem label="Postgres">
+    ```bash
+    pnpm add @mountsqli/driver-postgres
+    ```
+    Depends on `pg`.
+  </TabItem>
+  <TabItem label="MySQL">
+    ```bash
+    pnpm add @mountsqli/driver-mysql
+    ```
+    Depends on `mysql2`.
+  </TabItem>
+</Tabs>
+
+<Aside type="note" title="Single import">
+`mountsqli` is the umbrella package. Importing it pulls in the matching driver
+package; you usually do not import `@mountsqli/driver-sqlite` directly.
+</Aside>
+
+## Install subsystems (optional)
+
+Add only what you use. Each is a separate package:
+
+```bash
+pnpm add @mountsqli/auth     # passwords, JWT, RBAC, RLS, OAuth
+pnpm add @mountsqli/api      # REST / OpenAPI / RPC codegen
+pnpm add @mountsqli/storage  # signed URLs, versioning, S3
+pnpm add @mountsqli/realtime # hub, presence, live queries
+pnpm add @mountsqli/cache    # L1/L2/query cache
+pnpm add @mountsqli/ai       # natural language to SQL
+```
+
+## Requirements
+
+| Tool | Minimum |
+| --- | --- |
+| Node.js | 22.5+ (for the `node:sqlite` driver) |
+| pnpm | 11 (recommended) |
+| TypeScript | 5.9+ |
+| Module system | ESM only |
+
+<Aside type="caution" title="Node version">
+If you cannot use Node ≥ 22.5, choose the **Postgres** or **MySQL** driver. Only
+the zero-dependency SQLite driver needs `node:sqlite`.
+</Aside>
+
+## Verify the install
+
+```ts
+import { mountsqli, defineTable, int, text } from "@mountsqli/core";
+
+const ping = defineTable("ping", { id: int().pk() });
+const db = mountsqli({ driver: "sqlite", url: ":memory:", tables: [ping] });
+
+console.log("MountSQLI is ready");
+```
+
+## Common mistakes
+
+- Forgetting to install a driver — you get a `MountError("CONFIG", "unknown driver")`.
+- Using CommonJS `require` — MountSQLI is ESM-only.
+
+## Related
+
+- [Quick Start](/getting-started/quick-start/) — first query end to end.
+- [Drivers](/drivers/overview/) — when to use each driver.

@@ -1,0 +1,81 @@
+---
+title: InferTable
+description: Derive fully-typed row types from your table definitions at compile time — no code generation.
+---
+
+`InferTable<typeof table>` gives you the TypeScript type of a row. It is computed
+from the column builders, so it is always in sync with your schema.
+
+## What it is
+
+```ts
+import { defineTable, int, text, InferTable } from "@mountsqli/core";
+
+const users = defineTable("users", {
+  id: int().pk(),
+  email: text().notNull(),
+  age: int(), // nullable
+});
+
+type User = InferTable<typeof users>;
+//   ^? { id: number; email: string; age: number | null }
+```
+
+## Why it exists
+
+Other ORMs make you run a generator (`prisma generate`) to get row types.
+MountSQLI infers them directly from the column builders — there is nothing to
+run. Change a column, and every query result type updates on the next `tsc`.
+
+## Nullability flows through
+
+```ts
+const t = defineTable("t", {
+  a: int(),         // number | null
+  b: int().notNull(), // number
+});
+type Row = InferTable<typeof t>;
+//   ^? { a: number | null; b: number }
+```
+
+## Inferring the whole Db
+
+When you use `defineConfig`, derive the app `Db` from the config instead of
+typing tables one by one:
+
+```ts
+import { mountsqli, type DbFromConfig } from "@mountsqli/core";
+import config from "../mountsqli.config";
+
+export const db = mountsqli(config);
+export type AppDb = DbFromConfig<typeof config>;
+```
+
+`mountsqli` is generic and returns the typed `Db`. `mountsqliExtended` adds
+auth/realtime/storage subsystems structurally. Prefer `mountsqliExtended` when
+you use those.
+
+## The typed query result
+
+The builder uses `InferTable` so `.findOne()` knows its return type:
+
+```ts
+const row = await db.from(users).findOne();
+//   ^? User | null
+```
+
+## Best practices
+
+- Export `type User = InferTable<typeof users>` next to each table.
+- Use `DbFromConfig<typeof config>` for the app-wide Db type.
+- Let the compiler catch column renames — don't alias away the type.
+
+## Common mistakes
+
+- Hand-writing a row interface that drifts from the table.
+- Using `any` for query results instead of the inferred type.
+
+## Related
+
+- [Defining Tables](/schema/defining-tables/) — the source of inference.
+- [Type-Safety System](/architecture/type-safety/) — how phantom types work.

@@ -1,0 +1,92 @@
+---
+title: Joins
+description: Combine tables with inner, left, and right joins — type-safe and compiled to SQL.
+---
+import { Aside } from '@astrojs/starlight/components';
+
+
+`join()` adds a `JOIN` to the plan. MountSQLI supports inner, left, and right
+joins with explicit column pairs.
+
+## Inner join
+
+```ts
+const rows = await db
+  .from(posts)
+  .join("users", "inner", "authorId", "id")
+  .all();
+```
+
+This compiles to:
+
+```sql
+SELECT * FROM "posts" INNER JOIN "users" ON "posts"."authorId" = "users"."id"
+```
+
+## Left join
+
+```ts
+db.from(posts).join("users", "left", "authorId", "id").all();
+```
+
+## Right join
+
+```ts
+db.from(posts).join("users", "right", "authorId", "id").all();
+```
+
+## Join with an alias
+
+Pass a fifth argument to alias the joined table:
+
+```ts
+db.from(posts).join("users", "inner", "authorId", "id", "u").all();
+```
+
+## How joins type
+
+The result is a union of both row shapes. Use `select()` to keep only the
+columns you need:
+
+```ts
+db.from(posts)
+  .join("users", "inner", "authorId", "id")
+  .select("posts.title", "users.email")
+  .all();
+```
+
+<Aside type="note" title="Eager loading vs joins">
+For one-to-many nesting, prefer `findMany({ with: { author: true } })` over a
+manual join. Use `join()` when you need a flat, filtered result set.
+</Aside>
+
+## Real-world example
+
+List posts with their author's email:
+
+```ts
+export async function postsWithAuthors() {
+  return db
+    .from(posts)
+    .join("users", "inner", "authorId", "id")
+    .select("posts.title", "users.email")
+    .orderBy("posts.createdAt", "desc")
+    .all();
+}
+```
+
+## Best practices
+
+- Pick the join type that matches your nullability need (left = keep left rows).
+- Alias when joining the same table twice.
+- Select explicit columns to avoid column-name collisions.
+
+## Common mistakes
+
+- Using `inner` when you need orphaned left rows — they disappear.
+- Forgetting to qualify columns with the table name in `select()`.
+
+## Related
+
+- [Select](/query-builder/select/) — `findMany({ with })` for nesting.
+- [Filtering](/query-builder/filtering/) — filter on joined columns.

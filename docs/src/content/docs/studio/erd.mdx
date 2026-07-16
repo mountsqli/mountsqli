@@ -1,0 +1,41 @@
+---
+title: ERD Viewer
+description: Visualize your schema as an entity-relationship diagram in Studio.
+---
+
+The ERD Viewer draws your tables and their relationships from the **live
+schema**. It uses `introspect` to read the actual database, so it reflects what
+exists — not just your code.
+
+## Open the ERD
+
+1. Open Studio (`mountsqli dev`).
+2. Go to the ERD view.
+3. See tables as boxes with columns, and foreign keys as connectors.
+
+## What it shows
+
+- Tables and columns with types.
+- Primary keys (highlighted).
+- Foreign-key relationships between tables.
+- Nullability and uniqueness per column.
+
+## Why live schema?
+
+The ERD reads the database so it matches what `migrate apply` produced. If code
+and DB have drifted, the ERD shows the real state — pair it with
+[`mountsqli analyze`](/cli/analyze/) to catch the gap.
+
+## Best practices
+
+- Use the ERD to sanity-check relationships after adding FKs.
+- Cross-check it against `analyze` output during reviews.
+
+## Common mistakes
+
+- Assuming the ERD reflects code-only tables not yet migrated.
+
+## Related
+
+- [Migrations → Introspect](/migrations/introspect/) — the data source.
+- [Overview](/studio/overview/) — other Studio views.

@@ -1,0 +1,83 @@
+---
+title: mountsqli dev
+description: The all-in-one dev server — REST, storage, realtime, and Studio on a single port.
+---
+
+`mountsqli dev` starts one server that serves your backend and the Studio
+dashboard. No separate process for the UI.
+
+## Start it
+
+```bash
+mountsqli dev --port 3737
+```
+
+## What runs on the port
+
+| Path | Purpose |
+| --- | --- |
+| `/<table>` | REST list (GET) and create (POST) |
+| `/<table>/:id` | GET / PUT / DELETE one row |
+| `/files/<key>` | storage PUT / GET / DELETE |
+| `/files/<key>/url` | HMAC-signed URL for GET |
+| `/live/<channel>` | SSE subscribe |
+| `/live/<channel>/publish` | broadcast to a channel |
+| `/` | MountSQLI Studio dashboard (SPA) |
+| `/api/studio/*` | dashboard JSON: tables, query, erd, migrations, health |
+
+## REST example
+
+```bash
+# list users
+curl http://localhost:3737/users
+
+# create a user
+curl -X POST http://localhost:3737/users \
+  -H 'content-type: application/json' \
+  -d '{"email":"ada@example.com","age":36}'
+```
+
+## Storage example
+
+```bash
+# upload
+curl -X PUT http://localhost:3737/files/avatar.png \
+  -H 'content-type: image/png' \
+  --data-binary @avatar.png
+
+# signed URL
+curl http://localhost:3737/files/avatar.png/url
+```
+
+## Realtime example
+
+```bash
+# subscribe (SSE)
+curl -N http://localhost:3737/live/room-1
+
+# publish
+curl -X POST http://localhost:3737/live/room-1/publish \
+  -H 'content-type: application/json' \
+  -d '{"text":"hello"}'
+```
+
+## Why one port
+
+The Studio talks to the engine only through `Db` / `Driver` / `QueryPlan`. Merging
+it into the dev server means one command gives you the API, storage, realtime,
+and a visual dashboard.
+
+## Best practices
+
+- Use `dev` for local full-stack work; use a real server in production.
+- Protect `/files` and `/live` with auth in production (see [API → Auth Middleware](/api/auth-middleware/)).
+
+## Common mistakes
+
+- Hitting `/<table>` before tables exist — run `migrate apply` first.
+- Confusing the signed-URL endpoint (`/files/<key>/url`) with the object GET.
+
+## Related
+
+- [Studio → Overview](/studio/overview/) — the dashboard.
+- [CLI → Commands](/cli/commands/) — other subcommands.

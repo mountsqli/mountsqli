@@ -1,0 +1,82 @@
+---
+title: Group By & Having
+description: Group rows and filter groups with GROUP BY and HAVING.
+---
+import { Aside } from '@astrojs/starlight/components';
+
+
+`groupBy()` groups rows so aggregates apply per group. `having()` filters those
+groups — like `where()`, but after aggregation.
+
+## Group by a column
+
+```ts
+const rows = await db
+  .from(orders)
+  .select("customerId")
+  .sum("total", "totalSpent")
+  .groupBy("customerId")
+  .all();
+// → SELECT "customerId", SUM("total") AS "totalSpent" FROM "orders" GROUP BY "customerId"
+```
+
+## Multiple group columns
+
+```ts
+db.from(sales)
+  .select("region", "product")
+  .count("id", "units")
+  .groupBy("region", "product")
+  .all();
+```
+
+## Having
+
+`having()` filters groups, using the same comparators as `where()`:
+
+```ts
+db.from(orders)
+  .select("customerId")
+  .sum("total", "totalSpent")
+  .groupBy("customerId")
+  .having("totalSpent", ">", 1000)
+  .all();
+```
+
+<Aside type="note" title="where vs having">
+`where()` filters rows **before** grouping; `having()` filters groups **after**.
+Use `where()` to drop rows, `having()` to drop groups.
+</Aside>
+
+## Real-world example
+
+Customers who spent more than \$1,000, highest first:
+
+```ts
+export async function topSpenders() {
+  return db
+    .from(orders)
+    .select("customerId")
+    .sum("total", "totalSpent")
+    .groupBy("customerId")
+    .having("totalSpent", ">", 1000)
+    .orderBy("totalSpent", "desc")
+    .all();
+}
+```
+
+## Best practices
+
+- `select()` the group columns and the aggregates you need.
+- Put row-level filters in `where()`, group-level in `having()`.
+- Index the group-by column for large tables.
+
+## Common mistakes
+
+- Selecting a non-grouped, non-aggregated column — undefined per SQL.
+- Using `where()` to filter an aggregate instead of `having()`.
+
+## Related
+
+- [Aggregates](/query-builder/aggregates/) — the functions you group.
+- [Filtering](/query-builder/filtering/) — `where()` comparators.

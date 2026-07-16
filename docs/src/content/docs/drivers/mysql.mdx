@@ -1,0 +1,63 @@
+---
+title: MySQL
+description: The MySQL driver with ? pass-through parameters and AUTO_INCREMENT insert IDs.
+---
+
+`@mountsqli/driver-mysql` wraps `mysql2`. It uses `?` parameter style (pass-through)
+and surfaces `AUTO_INCREMENT` insert IDs.
+
+## Install & use
+
+```bash
+pnpm add @mountsqli/driver-mysql mysql2
+```
+
+```ts
+import "@mountsqli/driver-mysql";
+import { mountsqli } from "@mountsqli/core";
+
+const db = mountsqli({
+  driver: "mysql",
+  url: process.env.DATABASE_URL!,
+  tables: [users],
+});
+```
+
+## Parameter style
+
+The dialect compiles plans to `?` placeholders:
+
+```sql
+SELECT * FROM `users` WHERE `age` > ?
+```
+
+## Insert IDs
+
+MySQL uses `AUTO_INCREMENT`. The driver returns the generated id via `insertId`
+on insert, surfaced through `returning("id")`:
+
+```ts
+const { rows } = await db.from(users).returning("id").insert({ email: "a@b.c" });
+// rows[0].id is the AUTO_INCREMENT value
+```
+
+## Best for
+
+- Existing MySQL infrastructures.
+- Apps already standardized on `mysql2`.
+
+## Best practices
+
+- Load `DATABASE_URL` from env.
+- Use `returning("id")` to read the generated key.
+- Prefer this driver when your org mandates MySQL.
+
+## Common mistakes
+
+- Assuming `$N` params (MySQL uses `?`).
+- Forgetting `mysql2` is a peer dependency.
+
+## Related
+
+- [Drivers → Overview](/drivers/overview/) — driver model.
+- [Insert](/query-builder/insert/) — `returning()` for IDs.

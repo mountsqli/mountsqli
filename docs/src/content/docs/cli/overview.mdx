@@ -1,0 +1,72 @@
+---
+title: CLI Overview
+description: The mountsqli command-line tool — one binary for migrations, a dev server, Studio, and analysis.
+---
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+
+
+The `mountsqli` CLI is a single zero-dependency binary. It auto-detects your
+`mountsqli.config.*` from the current directory and runs migrations, a dev
+server, the Studio dashboard, and a health analysis.
+
+## Install
+
+The CLI ships with the core package. Run it without a global install:
+
+<Tabs>
+  <TabItem label="npm">
+    ```bash
+    npx mountsqli --help
+    ```
+  </TabItem>
+  <TabItem label="pnpm">
+    ```bash
+    pnpm mountsqli --help
+    ```
+  </TabItem>
+  <TabItem label="bun">
+    ```bash
+    bunx mountsqli --help
+    ```
+  </TabItem>
+</Tabs>
+
+## Commands
+
+| Command | What it does |
+| --- | --- |
+| `mountsqli migrate generate` | diff schema → write a migration file |
+| `mountsqli migrate apply` | run pending migrations |
+| `mountsqli migrate status` | show applied vs pending |
+| `mountsqli dev` | run REST + storage + realtime + Studio on one port |
+| `mountsqli analyze` | health report: drift, index suggestions, plan warnings |
+| `mountsqli api generate` | emit OpenAPI from named QueryPlans |
+| `mountsqli init` | scaffold a config file |
+
+## Config auto-detection
+
+The CLI looks for `mountsqli.config.ts`, `.js`, or `.json` in the current
+directory. You do not pass a path.
+
+<Aside type="note" title="Persisting migrations">
+`:memory:` is fresh per process. Use a file URL to persist `_mount_migrations`
+so `migrate status` is meaningful across runs.
+</Aside>
+
+## Best practices
+
+- Run `migrate apply` in your deploy step.
+- Use `dev` for local full-stack development — one port serves everything.
+- Run `analyze` in CI to catch drift before release.
+
+## Common mistakes
+
+- Running migrations against `:memory:` in one shell and the app against a file.
+- Forgetting the config file is in the current directory.
+
+## Related
+
+- [Commands](/cli/commands/) — full flag reference.
+- [mountsqli dev](/cli/dev/) — the all-in-one server.
+- [Migrations → Apply](/migrations/apply/) — what apply does.

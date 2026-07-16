@@ -1,0 +1,46 @@
+---
+title: Cache Inspector
+description: Inspect cache stats in Studio when the cache subsystem is enabled.
+---
+
+The Cache Inspector shows cache statistics when a `CacheBridge` is attached to
+the Studio context. If caching is off, it reports `enabled: false`.
+
+## Open it
+
+1. Open Studio (`mountsqli dev`) with caching configured.
+2. Go to the Cache view.
+
+## What it shows
+
+| Metric | Meaning |
+| --- | --- |
+| Hits / Misses | how often cached results were reused |
+| Evictions | entries removed by the eviction policy |
+| Size | current entry count |
+| Tags | which tags are present |
+
+## Prerequisites
+
+The inspector reads from a `CacheBridge` passed to `makeStudioContext`. In the
+CLI dev server, this is wired when your config includes a `cache` section.
+
+```ts
+import { makeStudioContext } from "@mountsqli/studio";
+const ctx = makeStudioContext(db, cacheBridge);
+```
+
+## Best practices
+
+- Watch hit rate to confirm your cache keys are stable.
+- Use tags to verify invalidation fires on writes.
+
+## Common mistakes
+
+- Opening the view without a cache configured — it shows `enabled: false`.
+- Reading size as a health signal without hit rate context.
+
+## Related
+
+- [Cache → Overview](/cache/overview/) — the caching subsystem.
+- [Cache → Tags](/cache/tags/) — tag-based invalidation.

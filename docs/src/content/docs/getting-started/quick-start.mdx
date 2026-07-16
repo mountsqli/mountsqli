@@ -1,0 +1,106 @@
+---
+title: Quick Start
+description: Define a table, open a database, and run your first type-safe query in five minutes.
+---
+import { Aside } from '@astrojs/starlight/components';
+
+
+This guide gets you from zero to a running query. It uses SQLite in memory, so
+no database setup is required.
+
+## 1. Install
+
+```bash
+pnpm add @mountsqli/core @mountsqli/driver-sqlite
+```
+
+## 2. Define a table
+
+```ts
+// db.ts
+import { defineTable, int, text } from "@mountsqli/core";
+
+export const users = defineTable("users", {
+  id: int().pk(),
+  email: text().notNull(),
+  age: int(),
+});
+
+export type User = InferTable<typeof users>;
+```
+
+## 3. Open the database
+
+```ts
+// db.ts
+import { mountsqli } from "@mountsqli/core";
+
+export const db = mountsqli({
+  driver: "sqlite",
+  url: ":memory:",
+  tables: [users],
+});
+```
+
+## 4. Run a query
+
+```ts
+// main.ts
+import { db, users } from "./db";
+
+await db.from(users).insert({ email: "ada@example.com", age: 36 });
+
+const adult = await db
+  .from(users)
+  .where("age", ">", 18)
+  .orderBy("email", "asc")
+  .findOne();
+
+console.log(adult);
+// → { id: 1, email: "ada@example.com", age: 36 }
+```
+
+That is it. The result is fully typed — `adult` is `User | null`.
+
+## What just happened?
+
+1. `defineTable` built a `TableDef` with phantom-typed columns.
+2. `mountsqli` created a `Db` with a driver and your tables.
+3. The builder produced a `QueryPlan`, the dialect compiled it to
+   `SELECT ... WHERE "age" > ?`, and the driver returned typed rows.
+
+<Aside type="tip" title="Injection-safe by construction">
+Every value is a bound parameter. `compilePlan` never string-concatenates
+values. The dialect decides `?` (SQLite/MySQL) vs `$1` (Postgres).
+</Aside>
+
+## Real-world shape
+
+In a real app you keep `db.ts` as the single source of truth and import `db`
+wherever you query:
+
+```ts
+// routes/users.ts
+import { db, users } from "../db";
+
+export async function listAdults() {
+  return db.from(users).where("age", ">=", 18).all();
+}
+```
+
+## Best practices
+
+- Put `defineTable` + `mountsqli` in one `db.ts` module.
+- Export `InferTable<typeof x>` types alongside each table.
+- Use `:memory:` for scripts and tests; use a file URL to persist.
+
+## Common mistakes
+
+- Awaiting `mountsqli()` — it is synchronous and returns a `Db` you can use now.
+- Using `any` for rows — let `InferTable` do the work.
+
+## Related
+
+- [Your First Project](/getting-started/first-project/) — a fuller scaffold with config.
+- [Query Builder → Select](/query-builder/select/) — every read option.
+- [Schema → Defining Tables](/schema/defining-tables/) — column builders in depth.

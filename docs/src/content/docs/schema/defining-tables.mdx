@@ -1,0 +1,104 @@
+---
+title: Defining Tables
+description: Define your database tables with defineTable and phantom-typed column builders. No decorators, no codegen.
+---
+import { Aside } from '@astrojs/starlight/components';
+
+
+A table is defined once with `defineTable`. Columns are built with factory
+functions like `int()`, `text()`, and `bool()`. The result is typed by
+TypeScript at compile time — no generator step.
+
+## What is `defineTable`?
+
+It takes a table name, a column map, and optional table-level options. It
+returns a `Table` object you pass to `mountsqli` and to the query builder.
+
+```ts
+import { defineTable, int, text } from "@mountsqli/core";
+
+const users = defineTable("users", {
+  id: int().pk(),
+  email: text().notNull(),
+  age: int(), // nullable by default
+});
+```
+
+## Column builders
+
+Each factory returns a `ColumnBuilder` you can chain. Builders are immutable —
+every chain method returns a new builder.
+
+| Factory | SQL type | TS type |
+| --- | --- | --- |
+| `int()` | INTEGER | `number` |
+| `text()` | TEXT | `string` |
+| `real()` | REAL | `number` |
+| `bool()` | INTEGER (0/1) | `boolean` |
+| `blob()` | BLOB | `Uint8Array` |
+| `json()` | JSON | `unknown` |
+| `uuid()` | TEXT | `string` |
+| `timestamp()` | TIMESTAMP | `Date` |
+| `enum(...)` | TEXT | `string` |
+
+<Aside type="note" title="Booleans are 0/1">
+`bool()` stores as `0`/`1` in the database. The driver decodes it back to a
+`boolean` on read using type info carried in the plan. You never see the 0/1.
+</Aside>
+
+## Table options
+
+Pass a third argument for multi-column constraints and relationships:
+
+```ts
+const memberships = defineTable(
+  "memberships",
+  {
+    userId: int(),
+    teamId: int(),
+    role: text(),
+  },
+  {
+    primaryKey: ["userId", "teamId"], // composite PK
+    unique: [["userId", "teamId"]],    // or a separate unique group
+    relations: [belongsTo("user", "users")],
+  },
+);
+```
+
+## Why define tables this way?
+
+- **No decorators, no class instances.** Tables are plain data.
+- **Types are inferred, not declared.** Add a column and the row type updates.
+- **One definition, many uses.** Migrations, the builder, and the Studio all
+  read the same `TableDef`.
+
+## Real-world example
+
+```ts
+import { defineTable, int, text, timestamp, uuid } from "@mountsqli/core";
+
+export const accounts = defineTable("accounts", {
+  id: uuid().pk(),
+  ownerId: int().notNull().references("users", "id", { onDelete: "CASCADE" }),
+  name: text().notNull(),
+  createdAt: timestamp().notNull().defaultNow(),
+});
+```
+
+## Best practices
+
+- Export each table from a single `tables.ts` module.
+- Name the export the singular noun (`users`, not `userTable`).
+- Use `.references(...)` for foreign keys so migrations generate them.
+
+## Common mistakes
+
+- Forgetting `.notNull()` — columns are nullable unless you opt in.
+- Defining the row type by hand instead of `InferTable`.
+
+## Related
+
+- [Column Types](/schema/column-types/) — every factory and its mapping.
+- [Constraints & Defaults](/schema/constraints/) — pk, unique, references, default.
+- [InferTable](/schema/infertable/) — derive the row type.

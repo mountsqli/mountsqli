@@ -1,0 +1,93 @@
+---
+title: Rate Limiting
+description: Opt-in brute-force protection for the login path with MemoryRateLimiter and injectable limiters.
+---
+import { Aside } from '@astrojs/starlight/components';
+
+
+MountSQLI ships an opt-in rate limiter for the login path. Failed attempts per
+key (username / IP) lock out after a threshold.
+
+## Enable on the facade
+
+```ts
+import { Auth } from "@mountsqli/auth";
+
+const auth = new Auth({
+  jwtKey: "secret",
+  rateLimit: { windowSec: 60, maxAttempts: 5, lockoutSec: 300 },
+});
+```
+
+## Use the facade wrappers
+
+```ts
+const key = `${username}:${ip}`;
+
+if (auth.isLockedOut(key)) {
+  return res.status(429).json({ error: "Locked out" });
+}
+
+const user = await verifyLogin(username, password);
+if (!user) {
+  auth.recordLoginFailure(key); // counts toward lockout
+  return res.status(401).json({ error: "Invalid" });
+}
+auth.clearLoginFailures(key); // success resets the counter
+```
+
+## Enable on MountAuth (automatic)
+
+`MountAuth.signIn` applies the limiter automatically when `rateLimit` is set:
+
+```ts
+const auth = createAuth({
+  jwt: { secret: "..." },
+  rateLimit: { windowSec: 60, maxAttempts: 5, lockoutSec: 300 },
+  providers: [/* ... */],
+});
+// signIn() checks isLocked, records on failure, resets on success
+```
+
+## Inject a shared limiter
+
+For multi-instance deploys, inject a `RateLimiter` (e.g. Redis-backed). It takes
+precedence over `rateLimit`:
+
+```ts
+const auth = new Auth({
+  jwtKey: "secret",
+  rateLimiter: new RedisRateLimiter(), // implements { isLocked, recordFailure, reset }
+});
+```
+
+The `RateLimiter` interface is:
+
+```ts
+interface RateLimiter {
+  isLocked(key: string): boolean;
+  recordFailure(key: string): void;
+  reset(key: string): void;
+}
+```
+
+<Aside type="note" title="In-memory is per-process">
+`MemoryRateLimiter` resets on restart and isn't shared across instances. For
+multi-instance, back it with a shared store (Redis) via `rateLimiter`.
+</Aside>
+
+## Best practices
+
+- Key by a stable identity (`username:ip`), not just IP.
+- Short window (60s) + meaningful lockout (5 min) for login.
+- Clear failures on success so legitimate users aren't penalized.
+
+## Common mistakes
+
+- Using only IP as the key — easy to lock out shared IPs.
+- Forgetting to `reset` on success — users get locked out repeatedly.
+
+## Related
+
+- [Sessions](/auth/sessions/) — the `Auth` facade.
+- [OAuth & Providers](/auth/oauth/) — `MountAuth.signIn` wiring.

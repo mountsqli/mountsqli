@@ -1,0 +1,56 @@
+---
+title: FAQ
+description: Frequently asked questions about MountSQLI.
+---
+
+Short answers to common questions. Each links to the full guide.
+
+## Is MountSQLI an ORM?
+
+Yes, but it's a **compile-leaning** ORM: the builder compiles to a `QueryPlan`
+IR rather than building a class hierarchy. See [Core Concepts](/getting-started/core-concepts/).
+
+## Do I need a code generator?
+
+No. Types are inferred from `defineTable` via phantom types. No `prisma generate`
+step. See [InferTable](/schema/infertable/).
+
+## Is it injection-safe?
+
+Yes, by construction. `compilePlan` never concatenates values; every value is a
+bound parameter. Raw-SQL hatches are guarded. See [Compiler & Dialects](/architecture/compiler/).
+
+## Which database should I use?
+
+SQLite for dev/tests (zero-dep, Node ≥ 22.5). Postgres or MySQL for production.
+See [Drivers → Overview](/drivers/overview/).
+
+## How do I do auth?
+
+Use `MountAuth` for full OAuth/sessions, or the primitives (`hashPassword`,
+`signJwt`, `Rbac`, RLS) for a custom flow. See [Auth → Overview](/auth/overview/).
+
+## How is RLS enforced?
+
+Policies compile into the `QueryPlan` as `WHERE` filters. Enforcement is opt-in
+via `enforceRls`. See [RLS Policy DSL](/auth/rls/).
+
+## Can the AI write queries?
+
+Yes — `nlToSql` emits a `QueryPlan`, which is type-checked and injection-safe like
+any other. See [Natural Language → SQL](/ai/nl-to-sql/).
+
+## Does it run on the edge?
+
+The plan-is-data design keeps allocation low, so it fits edge runtimes. Use
+Postgres/MySQL drivers there (avoid `node:sqlite`'s Node ≥ 22.5 need). See
+[Performance](/architecture/performance/).
+
+## How do I contribute?
+
+See [Contributing](/reference/contributing/).
+
+## Related
+
+- [Glossary](/reference/glossary/) — term definitions.
+- [Upgrade Guide](/reference/upgrade/) — version notes.

@@ -1,0 +1,104 @@
+---
+title: CLI Commands
+description: Full reference for every mountsqli subcommand, its arguments, options, and output.
+---
+
+This page is the complete command reference. Each command auto-detects
+`mountsqli.config.*` from the current directory.
+
+## migrate generate
+
+Create a migration file from schema changes.
+
+```bash
+mountsqli migrate generate [--name <n>] [--dir <path>]
+```
+
+| Option | Effect |
+| --- | --- |
+| `--name <n>` | custom migration name |
+| `--dir <path>` | migrations directory override |
+
+**Output:** `Created migration: <file>` (writes SQL, does not apply).
+
+## migrate apply
+
+Run pending migrations in transactions.
+
+```bash
+mountsqli migrate apply [--dir <path>] [--dry-run]
+```
+
+| Option | Effect |
+| --- | --- |
+| `--dir <path>` | migrations directory override |
+| `--dry-run` | print SQL, don't execute |
+
+**Output:** `Applying <file> ... done` per step, then `Applied N migration(s).`
+
+## migrate status
+
+Show applied and pending migrations.
+
+```bash
+mountsqli migrate status
+```
+
+**Output:** lists `Applied:` and `Pending:` migration names.
+
+## dev
+
+Run the all-in-one server: REST + storage + realtime + Studio.
+
+```bash
+mountsqli dev [--port <n>]
+```
+
+| Option | Effect |
+| --- | --- |
+| `--port <n>` | port (default 3737) |
+
+**Output:** `REST/STORE/LIVE/STUDIO on http://localhost:<port>`
+
+## analyze
+
+Health report: schema drift, index suggestions, plan warnings.
+
+```bash
+mountsqli analyze
+```
+
+**Output:** a structured report (drift vs live DB, suggested indexes, warnings).
+
+## api generate
+
+Emit OpenAPI JSON from named QueryPlans.
+
+```bash
+mountsqli api generate [--out <path>]
+```
+
+Reads the output path from `mountsqli.config.js` or defaults to `openapi.json`.
+
+## init
+
+Scaffold a `mountsqli.config.ts` in the current directory.
+
+```bash
+mountsqli init
+```
+
+## Best practices
+
+- Script `migrate apply` into deploys; run `analyze` in CI.
+- Use `--dry-run` before applying to production.
+
+## Common mistakes
+
+- Expecting `migrate rollback` (not provided — see [Migrations → Rollback](/migrations/rollback/)).
+- Running `dev` and `migrate` against different databases (`:memory:` vs file).
+
+## Related
+
+- [Overview](/cli/overview/) — command summary.
+- [mountsqli dev](/cli/dev/) — the server in depth.

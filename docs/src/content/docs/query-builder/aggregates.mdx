@@ -1,0 +1,70 @@
+---
+title: Aggregates
+description: Count, sum, average, min, and max rows with the builder's aggregate helpers.
+---
+
+Aggregates compute a value across rows. MountSQLI exposes `count`, `sum`,
+`avg`, `min`, and `max` as builder methods.
+
+## Count
+
+```ts
+const { count } = await db.from(users).count().findOne() ?? { count: 0 };
+// → SELECT COUNT(*) AS "count" FROM "users"
+```
+
+## Sum / Avg / Min / Max
+
+```ts
+db.from(orders).sum("total", "sumTotal").findOne();
+db.from(orders).avg("total", "avgTotal").findOne();
+db.from(products).min("price", "lowest").findOne();
+db.from(products).max("price", "highest").findOne();
+```
+
+## Combine with filters
+
+Aggregates respect `where()`:
+
+```ts
+const adults = await db.from(users).where("age", ">=", 18).count().findOne();
+```
+
+## Aliasing
+
+The first argument is the column (or `*` for count); the last is the alias:
+
+```ts
+db.from(users).count("id", "userCount").findOne();
+```
+
+## Real-world example
+
+Average order value for a customer:
+
+```ts
+export async function avgOrder(customerId: number) {
+  const row = await db
+    .from(orders)
+    .where("customerId", "=", customerId)
+    .avg("total", "avgTotal")
+    .findOne();
+  return row?.avgTotal ?? 0;
+}
+```
+
+## Best practices
+
+- Use `count()` for totals; `findOne()` returns the single aggregate row.
+- Give aggregates a clear alias so the result key is predictable.
+- Filter before aggregating to avoid scanning the whole table.
+
+## Common mistakes
+
+- Expecting `count()` to return a number directly — it returns a row you read.
+- Aggregating without a filter on a large table (slow, full scan).
+
+## Related
+
+- [Group By & Having](/query-builder/group-by/) — per-group aggregates.
+- [Select](/query-builder/select/) — reading the aggregate row.

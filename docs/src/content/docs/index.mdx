@@ -1,0 +1,89 @@
+---
+title: MountSQLI
+description: Next-generation type-safe ORM & backend platform. Native SQL first, type-safe everything, zero config, AI native.
+template: splash
+hero:
+  tagline: Next-generation type-safe ORM & backend platform.
+  image:
+    file: ../../assets/MountSQLi-logo.png
+  actions:
+    - text: Get Started
+      link: /getting-started/introduction/
+      icon: right-arrow
+      variant: primary
+    - text: Why MountSQLI?
+      link: /getting-started/why-mountsqli/
+      icon: open-book
+    - text: GitHub
+      link: https://github.com/mountsqli/mountsqli
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+## What is MountSQLI?
+
+MountSQLI is a **compile-leaning ORM + backend engine**. The ORM is a
+**compiler + an intermediate representation (QueryPlan IR)**, not a class
+hierarchy. That makes it tree-shakeable, edge-ready, and near-zero-allocation
+where Prisma, Drizzle, and TypeORM cannot be.
+
+- **Native SQL first** — the builder is a typed view over SQL, never a replacement.
+- **Type-safe everything** — invalid queries are *type errors*, caught before runtime.
+- **Zero runtime cost where possible** — IR/compiler over classes; tree-shake to the feature.
+- **Compile-time validation** — no generators, no decorators, no bespoke schema language.
+- **AI native** — AI-generated SQL goes through the same compiler validator as hand-written input.
+
+## Start here
+
+<CardGrid>
+  <LinkCard
+    title="Quick Start"
+    description="Run your first type-safe query in five minutes."
+    href="/getting-started/quick-start/"
+  />
+  <LinkCard
+    title="Core Concepts"
+    description="The compiler + QueryPlan IR mental model."
+    href="/getting-started/core-concepts/"
+  />
+  <LinkCard
+    title="Schema"
+    description="Define tables and infer row types at compile time."
+    href="/schema/defining-tables/"
+  />
+  <LinkCard
+    title="Query Builder"
+    description="Select, insert, update, delete, joins, window functions."
+    href="/query-builder/select/"
+  />
+</CardGrid>
+
+## Build a backend, not just an ORM
+
+<CardGrid>
+  <LinkCard title="Auth" description="Passwords, JWT, RBAC, RLS, OAuth with CSRF + PKCE." href="/auth/overview/" />
+  <LinkCard title="API" description="REST, OpenAPI, and RPC codegen from QueryPlans." href="/api/overview/" />
+  <LinkCard title="Storage" description="Signed URLs, versioning, S3 adapter." href="/storage/overview/" />
+  <LinkCard title="Realtime" description="Hub, presence, and live queries." href="/realtime/overview/" />
+  <LinkCard title="Cache" description="L1/L2/query cache with tags and eviction." href="/cache/overview/" />
+  <LinkCard title="AI" description="Natural language to SQL, explain and review." href="/ai/overview/" />
+</CardGrid>
+
+## Run it anywhere
+
+<CardGrid>
+  <LinkCard title="Drivers" description="SQLite, Postgres, and MySQL from one API." href="/drivers/overview/" />
+  <LinkCard title="CLI" description="Migrate, dev server, and Studio in one binary." href="/cli/overview/" />
+  <LinkCard title="Studio" description="Visual dashboard merged into the dev server." href="/studio/overview/" />
+  <LinkCard title="Architecture" description="How the compiler, IR, and drivers fit together." href="/architecture/how-it-works/" />
+</CardGrid>
+
+<aside class="starlight-aside starlight-aside--tip">
+  <p class="starlight-aside__title">Tip</p>
+  <p>
+    New here? Read <a href="/getting-started/introduction/">Introduction</a> then
+    <a href="/getting-started/quick-start/">Quick Start</a>. Everything else links back to those.
+  </p>
+</aside>

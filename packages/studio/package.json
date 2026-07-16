@@ -1,0 +1,47 @@
+{
+  "name": "@mountsqli/studio",
+  "version": "0.6.0",
+  "type": "module",
+  "description": "MountSQLI Studio — visual dashboard (data browser, SQL editor, ERD, migrations) served through the engine",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@mountsqli/api": "workspace:*",
+    "@mountsqli/cache": "workspace:*",
+    "@mountsqli/compiler": "workspace:*",
+    "@mountsqli/core": "workspace:*",
+    "@mountsqli/driver": "workspace:*",
+    "@mountsqli/migration": "workspace:*",
+    "@mountsqli/realtime": "workspace:*",
+    "@mountsqli/schema": "workspace:*",
+    "@mountsqli/storage": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "vitest": "^3.2.7"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.5"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

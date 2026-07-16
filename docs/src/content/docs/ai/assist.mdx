@@ -1,0 +1,67 @@
+---
+title: Explain / Optimize / Review
+description: Understand, improve, and audit QueryPlans with the AI advisors.
+---
+
+The `ai` package includes static advisors that work on `QueryPlan`s — no model
+call required for `explain`/`optimize`/`review`.
+
+## explainPlan
+
+Returns a human-readable description of a plan.
+
+```ts
+import { explainPlan } from "@mountsqli/ai";
+
+const info = explainPlan(plan);
+// info.summary: "Selects from users where age > 18, ordered by email"
+```
+
+## optimizePlan
+
+Suggests improvements (e.g. missing indexes, full scans).
+
+```ts
+import { optimizePlan } from "@mountsqli/ai";
+
+const suggestions = optimizePlan(plan);
+// [{ type: "index", table: "users", columns: ["email"] }]
+```
+
+## reviewPlans
+
+Audits a set of plans for security/perf issues.
+
+```ts
+import { reviewPlans } from "@mountsqli/ai";
+
+const findings = reviewPlans([planA, planB]);
+// [{ severity: "warn", message: "...", plan: "users" }]
+```
+
+## The Ai class
+
+`Ai` bundles them:
+
+```ts
+const ai = new Ai({ provider: myProvider });
+ai.explain(plan);
+ai.optimize(plan);
+ai.review([planA, planB]);
+```
+
+## Best practices
+
+- Run `reviewPlans` in CI on generated queries.
+- Use `optimizePlan` hints to drive `analyze` index suggestions.
+- Explain plans to non-SQL teammates for review.
+
+## Common mistakes
+
+- Treating `optimizePlan` suggestions as mandatory — weigh them against load.
+- Reviewing only hand-written plans and skipping AI-generated ones.
+
+## Related
+
+- [Natural Language → SQL](/ai/nl-to-sql/) — generate plans to review.
+- [CLI → analyze](/cli/analyze/) — runtime index suggestions.
