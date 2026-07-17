@@ -2,12 +2,40 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb, eq } from "@/lib/db";
 import { apiError } from "@/lib/api-error";
 import { users } from "@/schema";
-import { verifyPassword, MemoryRateLimiter } from "@mountsqli/auth";
+import { verifyPassword } from "@mountsqli/auth";
 import { signToken } from "@/lib/auth";
 
-// Brute-force guard: max 5 failed attempts per username+IP within 60s,
-// then lock out for 5 minutes.
-const loginLimiter = new MemoryRateLimiter({ windowSec: 60, maxAttempts: 5, lockoutSec: 300 });
+// Simple in-memory rate limiter for brute-force protection.
+// 5 failed attempts per username+IP within 60s, then lock out for 5 minutes.
+const failureCounts = new Map<string, { count: number; lockedUntil: number }>();
+const WINDOW_MS = 60_000;
+const LOCKOUT_MS = 300_000;
+const MAX_ATTEMPTS = 5;
+
+function checkRateLimit(key: string): boolean {
+  const now = Date.now();
+  const entry = failureCounts.get(key);
+  if (entry && entry.lockedUntil > now) return false; // locked
+  return true;
+}
+
+function recordFailure(key: string): void {
+  const now = Date.now();
+  const entry = failureCounts.get(key);
+  if (!entry || now - entry.lockedUntil > WINDOW_MS) {
+    failureCounts.set(key, { count: 1, lockedUntil: now + WINDOW_MS });
+  } else {
+    const count = entry.count + 1;
+    failureCounts.set(key, {
+      count,
+      lockedUntil: count >= MAX_ATTEMPTS ? now + LOCKOUT_MS : entry.lockedUntil,
+    });
+  }
+}
+
+function resetRateLimit(key: string): void {
+  failureCounts.delete(key);
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -20,21 +48,21 @@ export async function POST(req: NextRequest) {
 
     const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
     const limitKey = `${name}:${clientIp}`;
-    if (loginLimiter.isLocked(limitKey)) {
+    if (!checkRateLimit(limitKey)) {
       return NextResponse.json({ error: "Too many failed attempts. Try again later.", code: "RATE_LIMITED" }, { status: 429 });
     }
 
     const db = await getDb();
     const user = await db.query(users).where(eq("username", name)).findOne();
 
-    if (!user || !user.password_hash || !verifyPassword(pass, user.password_hash)) {
-      loginLimiter.recordFailure(limitKey);
+    if (!user || !user.password_hash || !(await verifyPassword(pass, user.password_hash))) {
+      recordFailure(limitKey);
       return NextResponse.json({ error: "Invalid username or password", code: "FORBIDDEN" }, { status: 401 });
     }
-    loginLimiter.reset(limitKey);
+    resetRateLimit(limitKey);
 
     // Stateless JWT — user data encoded in the token, no DB lookup on verify
-    const token = signToken({ id: user.id, username: user.username, role: user.role, display_name: user.display_name });
+    const token = await signToken({ id: user.id, username: user.username, role: user.role, display_name: user.display_name });
 
     const response = NextResponse.json({
       token,

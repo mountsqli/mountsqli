@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb, eq } from "@/lib/db";
 import { apiError } from "@/lib/api-error";
 import { users } from "@/schema";
+import { verifyToken } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
   try {
@@ -11,19 +12,16 @@ export async function GET(req: NextRequest) {
     }
 
     const token = authHeader.slice(7);
+    const payload = await verifyToken(token);
+
+    if (!payload) {
+      return NextResponse.json({ error: "Invalid token", code: "FORBIDDEN", detail: "token_expired" }, { status: 401 });
+    }
+
     const db = await getDb();
-    if (!db.auth) {
-      return NextResponse.json({ error: "Auth subsystem unavailable", code: "UNAVAILABLE" }, { status: 503 });
-    }
-    const result = await db.auth.authenticate(token);
+    const user = await db.query(users).where(eq("id", payload.sub)).findOne();
 
-    if (!result.ok) {
-      return NextResponse.json({ error: "Invalid token", code: "FORBIDDEN", detail: result.reason }, { status: 401 });
-    }
-
-    const user = await db.query(users).where(eq("id", result.user?.userId)).findOne();
-
-    return NextResponse.json({ user, authenticated: result });
+    return NextResponse.json({ user, authenticated: true });
   } catch (err) {
     return apiError(err);
   }

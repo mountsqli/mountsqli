@@ -1,6 +1,6 @@
 {
   "name": "@mountsqli/auth",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "type": "module",
   "description": "MountSQLI auth: passwords, JWT, sessions, RBAC, and RLS policy engine",
   "main": "./dist/index.js",
@@ -24,13 +24,15 @@
   },
   "dependencies": {
     "@mountsqli/compiler": "workspace:*",
-    "@mountsqli/query": "workspace:*",
-    "@mountsqli/schema": "workspace:*"
+    "@mountsqli/core": "workspace:*",
+    "@mountsqli/schema": "workspace:*",
+    "jose": "^6.0.0"
   },
   "devDependencies": {
     "vitest": "^3.0.0",
     "@types/node": "^22.0.0",
-    "@mountsqli/driver": "workspace:*"
+    "@mountsqli/driver": "workspace:*",
+    "@mountsqli/driver-sqlite": "workspace:*"
   },
   "keywords": [
     "mountsqli",

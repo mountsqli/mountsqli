@@ -1,85 +1,68 @@
 ---
-title: RLS Policy DSL
-description: Express row-level security as policies compiled into the QueryPlan — not app code.
+title: RLS (compilePolicy)
+description: compilePolicy bridges auth policies into storage ACLs — minimal, type-safe, for object-level access control.
 ---
 
-Row-level security in MountSQLI is **compiled into the QueryPlan** as
-`FilterNode[]`, then injected as `WHERE` clauses. RLS lives in the plan, so
-`@mountsqli/query` stays free of `@mountsqli/auth` and `core` stays light.
+The redesigned `@mountsqli/auth` no longer includes a general-purpose RLS
+policy DSL (`allowOwner`, `allowTenant`, `applyPolicy`). Instead, it exports
+`compilePolicy`/`Policy`/`PolicyContext` as a minimal type bridge used by
+`@mountsqli/storage` for **object ACL checks**.
 
-## Policy builders
+## Non-RLS replacement
 
-```ts
-import { allowOwner, allowTenant, allowRole, allowPublic, andPolicies } from "@mountsqli/auth";
+For **row-level security** at the query level, use MountSQLI's driver-level RLS
+enforcement (opt-in `enforceRls` mode with `.unsafe()` / `withFilters()`). See
+the [Raw SQL & RLS Gate](/query-builder/raw-sql/) page.
 
-const policy = andPolicies(allowOwner("ownerId"), allowTenant("tenantId"));
-```
+## compilePolicy (storage ACLs)
 
-| Builder | Meaning |
-| --- | --- |
-| `allowOwner(column)` | row allowed if `column = ctx.userId` |
-| `allowTenant(column)` | row allowed if `column = ctx.claims.tenantId` |
-| `allowRole(role)` | allowed if `ctx.roles` includes `role` |
-| `allowPublic()` | always allowed |
-| `andPolicies(...)` | all must pass |
-
-## Apply a policy to a query
+`compilePolicy` is consumed by `@mountsqli/storage` to check object access:
 
 ```ts
-import { applyPolicy } from "@mountsqli/auth";
+import { compilePolicy, type Policy, type PolicyContext } from "@mountsqli/auth";
 
-const scoped = applyPolicy(
-  db.from(files),
-  allowOwner("ownerId"),
-  { userId: "u1" },
-);
-const rows = await scoped.select();
-// → SELECT * FROM "files" WHERE "ownerId" = ?
+// A policy is a function: (ctx: PolicyContext) => { deny: boolean; filters: FilterNode[] }
+const policy: Policy = (ctx) => {
+  if (!ctx.userId) return { deny: true, filters: [] };
+  return {
+    deny: false,
+    filters: [{ kind: "filter", column: "ownerId", op: "=", value: ctx.userId }],
+  };
+};
+
+const { deny, filters } = compilePolicy(policy, { userId: "u1" });
+// deny === false
+// filters[0] === { kind: "filter", column: "ownerId", op: "=", value: "u1" }
 ```
 
-`applyPolicy` returns a builder with the filter injected. An unauthenticated
-`allowOwner` compiles to `WHERE 1=0` (deny).
+Storage's `canAccess()` method calls compilePolicy and checks the object's
+stored ACL against the produced filters.
 
-## Compile without applying
-
-`compilePolicy(policy, ctx)` returns `{ filters, deny }` directly — storage
-reuses the same engine:
+## Types
 
 ```ts
-import { compilePolicy } from "@mountsqli/auth";
+interface PolicyContext {
+  userId?: string | number;
+  roles?: string[];
+  claims?: Record<string, unknown>;
+}
 
-const { filters, deny } = compilePolicy(allowOwner("ownerId"), { userId: 9 });
-// filters: [{ kind: "filter", column: "ownerId", op: "=", value: 9 }]
+interface FilterNode {
+  kind: "filter" | string;
+  column?: string;
+  op?: string;
+  value?: unknown;
+}
+
+type Policy = (ctx: PolicyContext) => { deny: boolean; filters: FilterNode[] };
 ```
-
-## Opt-in enforcement mode
-
-Register per-table default policies and enable enforcement on the `Db`:
-
-```ts
-import { createPolicyRegistry } from "@mountsqli/auth";
-
-const registry = createPolicyRegistry();
-registry.register("files", allowOwner("ownerId"));
-
-// driver.rls = { enforce: true, registry }
-```
-
-In enforce mode, querying a protected table **without** `applyPolicy` (or
-`.unsafe()`) throws `MountError("FORBIDDEN")`.
 
 ## Best practices
 
-- Define policies once in a registry; apply them at the edge.
-- Use `compilePolicy` when you need the filters outside a query (e.g. storage).
-- Prefer `allowOwner`/`allowTenant` over hand-written `where()` for security.
-
-## Common mistakes
-
-- Forgetting `applyPolicy` in enforce mode — query is rejected.
-- Putting auth logic in `where()` instead of a policy (harder to audit).
+- Use `compilePolicy` only for storage ACL checks.
+- For query-level RLS, use MountSQLI's driver-level enforcement (see link below).
 
 ## Related
 
-- [Raw SQL & RLS Gate](/query-builder/raw-sql/) — `.unsafe()` and `withFilters`.
-- [RBAC](/auth/rbac/) — role-level (not row-level) authorization.
+- [Raw SQL & RLS Gate](/query-builder/raw-sql/) — query-level RLS with `withFilters()` and `.unsafe()`.
+- [Storage → Signed URLs](/storage/signed-urls/) — ACL-based access control.

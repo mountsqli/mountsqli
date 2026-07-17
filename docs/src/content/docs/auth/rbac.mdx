@@ -1,72 +1,73 @@
 ---
 title: RBAC
-description: Role-based access control with the Rbac class — grants, wildcards, and can().
+description: Role-based access control with built-in role tables and permission checks.
 ---
 
-`Rbac` maps roles to permissions and answers "can this role do X?".
+RBAC is built into the `Auth` class. Roles and user-role assignments are stored
+in the `authRoles` and `authUserRoles` tables.
 
-## Define grants
+## Create a role
 
 ```ts
-import { Rbac } from "@mountsqli/auth";
+await auth.rbac.createRole({
+  name: "admin",
+  permissions: ["users:read", "users:write", "*"],
+});
 
-const rbac = new Rbac()
-  .define({ name: "reader", permissions: ["posts:read"] })
-  .define({ name: "writer", permissions: ["posts:write", "posts:*"] });
+await auth.rbac.createRole({
+  name: "viewer",
+  permissions: ["users:read"],
+});
+```
+
+Permissions are strings. Use `*` as a wildcard.
+
+## Assign a role to a user
+
+```ts
+await auth.rbac.assignRole(userId, "admin");
 ```
 
 ## Check permissions
 
 ```ts
-rbac.can(["reader"], "posts:read");      // true
-rbac.can(["reader"], "posts:write");     // false
-rbac.can(["writer"], "posts:delete");    // true  (posts:* matches)
+const canWrite = await auth.rbac.authorize(userId, "users:write");
+// true | false
+
+const isAdmin = await auth.rbac.hasRole(userId, "admin");
 ```
 
-Use `canWildcard` for `*` patterns:
+## Get user roles
 
 ```ts
-rbac.canWildcard(["writer"], "posts:anything"); // true
+const roles = await auth.rbac.getUserRoles(userId);
+// Role[] — each with id, name, permissions, createdAt
 ```
 
-## Integrate with Auth
+## API
 
-Pass an `Rbac` into the `Auth` facade to check user roles:
-
-```ts
-const auth = new Auth({ jwtKey: "secret", rbac });
-auth.can(["admin"], "users:write"); // true/false
-```
-
-## Permission shape
-
-Permissions are strings, conventionally `"resource:action"`. Wildcards use `*`:
-
-- `posts:*` — every action on posts
-- `*` — everything
-
-## Real-world example
-
-```ts
-function requirePermission(user: AuthedUser, permission: string) {
-  if (!rbac.canWildcard(user.roles, permission)) {
-    throw new MountError("FORBIDDEN", "Missing permission");
-  }
-}
-```
+| Method | Purpose |
+| --- | --- |
+| `auth.rbac.createRole({name, permissions})` | create a role |
+| `auth.rbac.deleteRole(roleId)` | delete a role |
+| `auth.rbac.assignRole(userId, roleName)` | assign by name |
+| `auth.rbac.removeRole(userId, roleName)` | remove from user |
+| `auth.rbac.getUserRoles(userId)` | list roles for a user |
+| `auth.rbac.hasRole(userId, roleName)` | check exact role |
+| `auth.rbac.authorize(userId, permission)` | check permission (supports `*` wildcard) |
 
 ## Best practices
 
-- Define roles once; reference them by name everywhere.
-- Use `*` sparingly — prefer explicit permissions.
-- Evaluate RBAC after authentication, not instead of it.
+- Define roles at startup (seed them in a migration).
+- Prefer `authorize` with granular permissions over `hasRole`.
+- Use `*` sparingly — explicit permissions are easier to audit.
 
 ## Common mistakes
 
-- Using `can` when you meant `canWildcard` (no `*` expansion).
-- Putting authorization checks in handlers instead of a middleware.
+- Forgetting to include `authRoles` and `authUserRoles` in your `mountsqli` tables array.
+- Assigning a role that doesn't exist yet.
 
 ## Related
 
-- [RLS Policy DSL](/auth/rls/) — data-level (row) authorization.
-- [Sessions](/auth/sessions/) — the `Auth` facade that holds the `Rbac`.
+- [OAuth & Providers](/auth/oauth/) — assign roles on OAuth callback.
+- [Sessions](/auth/sessions/) — session data includes the user.

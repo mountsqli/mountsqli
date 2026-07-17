@@ -574,7 +574,10 @@ export class QueryBuilder<T extends Table<any>> {
    */
   async insert(values: Partial<Row<T>> | Partial<Row<T>>[]): Promise<QueryResult<Row<T>>> {
     const plan: QueryPlan = { ...this.plan, op: "insert", values: Array.isArray(values) ? values : values as any };
-    return this.driver.query(compilePlan(plan, this.dialect), "run");
+    // When RETURNING is set, use "one" mode so the driver returns the inserted rows.
+    // Without RETURNING, "run" mode is faster and avoids unnecessary decode overhead.
+    const mode: ExecuteMode = this.plan.returning ? "one" : "run";
+    return this.driver.query(compilePlan(plan, this.dialect), mode);
   }
 
   /**

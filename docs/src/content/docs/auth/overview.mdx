@@ -1,63 +1,86 @@
 ---
 title: Auth Overview
-description: Two layers of auth in MountSQLI — low-level primitives and the NextAuth-style MountAuth framework.
+description: Auth for MountSQLI — passwords, JWT, sessions, OAuth, TOTP, RBAC, and middleware for Express/Nextjs/Fastify/Hono.
 ---
 
-`@mountsqli/auth` provides **two layers**. Pick the one that fits.
+`@mountsqli/auth` provides a complete authentication system built on top of
+MountSQLI's `Db`. It includes schema tables, password hashing, JWT, sessions,
+OAuth, TOTP (2FA), RBAC, rate limiting, and middleware for four frameworks.
 
-## Layer 1 — Low-level primitives
+## Create an auth instance
 
-Small, dependency-free building blocks you compose yourself:
+```ts
+import { createAuth, authUsers, authSessions, authAccounts } from "@mountsqli/auth";
+import { mountsqli } from "@mountsqli/core";
 
-- `hashPassword` / `verifyPassword` — scrypt credentials
-- `signJwt` / `verifyJwt` — HS256 + EdDSA tokens
-- `Rbac` — role → permission grants
-- `allowOwner` / `allowTenant` / `allowRole` / `andPolicies` — RLS policy DSL
-- `Auth` — session facade over a `TokenStore`
-- `MemoryRateLimiter` — opt-in brute-force limiter
+const db = await mountsqli({
+  driver: "sqlite",
+  url: "./app.db",
+  tables: [authUsers, authSessions, authAccounts],
+});
 
-## Layer 2 — MountAuth framework
+const auth = createAuth({
+  db,
+  secret: process.env.JWT_SECRET!,
+  providers: [],
+});
+```
 
-A NextAuth.js-style framework for the full OAuth + session flow:
+The schema tables are passed to `mountsqli` along with your app's tables.
+Auth auto-discovers them by name — no config needed.
 
-- `MountAuth` / `createAuth`
-- Providers: `GoogleProvider`, `GitHubProvider`, `DiscordProvider`, `TwitterProvider`, `CredentialsProvider`
-- `createPgAdapter` — Postgres-backed user/account/session storage
-- Stateless JWT sessions in HTTP-only cookies
-- CSRF + PKCE built into the OAuth flow
+## What's included
 
-## Security guarantees
-
-MountSQLI's auth hardening pass closed real attack classes:
-
-- **JWT algorithm confusion** — `verifyJwt` enforces the configured `alg`.
-- **Weak password hashing** — scrypt `N = 2^15`, cost persisted in the hash.
-- **Timing attacks** — password and signed-URL compares are constant-time.
-- **Login-CSRF** — OAuth binds `state` + PKCE `code_verifier` to cookies.
-- **Brute force** — opt-in rate limiting / lockout on the login path.
-
-## Which layer should I use?
-
-| Need | Use |
+| Piece | API |
 | --- | --- |
-| Full OAuth + session cookies | `MountAuth` (Layer 2) |
-| Just hash + verify passwords | `hashPassword` / `verifyPassword` |
-| Row-level security in queries | policy DSL (Layer 1) |
-| Hand-rolled login route | `Auth` facade + `MemoryRateLimiter` |
+| Passwords | `hashPassword` / `verifyPassword` (scrypt, constant-time) |
+| JWT | `createToken` / `verifyToken` / `decodeToken` (HS256 via `jose`) |
+| TOTP (2FA) | `generateSecret` / `generateCode` / `verifyCode` / `generateURI` |
+| Sessions | JWT-strategy built in; database strategy via `authSessions` |
+| OAuth | `google`, `github` providers with CSRF state validation |
+| RBAC | `auth.rbac.createRole` / `assignRole` / `authorize` |
+| Rate limiting | `InMemoryRateLimiter` (5 req/min per key) |
+| Email | `sendVerificationEmail` / `sendPasswordResetEmail` |
+| Middleware | Express, Next.js, Fastify, Hono — plug in one line |
 
-## Best practices
+## Quick start
 
-- Keep `MountAuth` out of the hot path — verify with `verifyPassword` + `signJwt`.
-- Use `createPgAdapter` for production sessions (not in-memory).
-- Enable rate limiting on any credential endpoint.
+```ts
+const auth = createAuth({ db, secret: "my-secret", providers: [] });
 
-## Common mistakes
+// Register
+const { user, token } = await auth.register({
+  email: "ada@example.com",
+  password: "StrongP4ss!",
+});
 
-- Using `MemoryTokenStore` in production (sessions lost on restart).
-- Forgetting `rateLimit` on a public login route.
+// Authenticate
+const session = await auth.getSession({
+  headers: { authorization: `Bearer ${token}` },
+});
+```
+
+## Built-in schema tables
+
+| Table | Purpose |
+| --- | --- |
+| `authUsers` | users (email, password hash, 2FA secret, etc.) |
+| `authSessions` | database-backed session tokens |
+| `authAccounts` | OAuth provider accounts linked to a user |
+| `authVerificationTokens` | email verification & password reset tokens |
+| `authRoles` | RBAC roles with permission lists |
+| `authUserRoles` | many-to-many user → role assignments |
+
+## Security
+
+- Passwords hashed with scrypt `N = 2^15`, constant-time comparison.
+- JWT algorithm enforced (HS256), no algorithm confusion.
+- OAuth CSRF protection via state validation.
+- Rate limiter on login (5 attempts / minute).
+- Token-based 2FA (TOTP) supported.
 
 ## Related
 
 - [Passwords & JWT](/auth/passwords-jwt/) — the crypto primitives.
-- [OAuth & Providers](/auth/oauth/) — the framework flow.
-- [RLS Policy DSL](/auth/rls/) — query-level enforcement.
+- [OAuth & Providers](/auth/oauth/) — social login.
+- [RBAC](/auth/rbac/) — role-based access control.

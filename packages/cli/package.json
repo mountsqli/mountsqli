@@ -1,6 +1,6 @@
 {
   "name": "@mountsqli/cli",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "type": "module",
   "description": "MountSQLI CLI: migrate generate/apply/status, dev server, api generate",
   "main": "./dist/index.js",

@@ -1,75 +1,25 @@
 ---
 title: OAuth & Providers
-description: The NextAuth-style MountAuth framework — providers, CSRF + PKCE, and session cookies.
+description: Social login with Google, GitHub, and email/password — providers, state validation, and the callback flow.
 ---
+
 import { Aside } from '@astrojs/starlight/components';
 
-
-`MountAuth` (`createAuth`) drives the OAuth authorization-code flow with **CSRF
-+ PKCE** built in. It mirrors NextAuth's shape: providers, callbacks, events,
-and stateless JWT sessions in HTTP-only cookies.
-
-## Providers
-
-| Provider | Type |
-| --- | --- |
-| `GoogleProvider` | oauth (PKCE) |
-| `GitHubProvider` | oauth (PKCE) |
-| `DiscordProvider` | oauth |
-| `TwitterProvider` | oauth |
-| `CredentialsProvider` | credentials |
-
-## Create the auth instance
+## Configure providers
 
 ```ts
-import { createAuth, GoogleProvider } from "@mountsqli/auth";
+import { createAuth, google, github, credentials } from "@mountsqli/auth";
 
 const auth = createAuth({
-  jwt: { secret: "..." },
-  providers: [GoogleProvider({ clientId, clientSecret })],
-});
-```
-
-## The OAuth flow (two routes)
-
-### Step 1 — redirect
-
-Sets a `mountsqli.csrf-token` + `mountsqli.pkce-verifier` HttpOnly cookie, then
-returns the provider URL:
-
-```ts
-const url = await auth.getAuthorizationUrl("google", res);
-// res gets the two cookies; redirect the user to `url`
-```
-
-### Step 2 — callback
-
-Verifies the callback `state` matches the cookie (login-CSRF guard) and supplies
-the PKCE verifier. Returns `null` on mismatch:
-
-```ts
-const result = await auth.handleCallback("google", code, state, req.headers, res);
-// → { user, token } | null
-```
-
-<Aside type="caution" title="Login-CSRF is closed">
-A callback with a mismatched or missing `state` is rejected. The `state` is bound
-to the session cookie and PKCE `code_verifier`/`code_challenge` are wired for
-providers that support it (Google, GitHub). This closes the classic
-authorization-code injection attack (audit #4).
-</Aside>
-
-## Credentials (email + password)
-
-```ts
-const auth = createAuth({
-  jwt: { secret: "..." },
+  db,
+  secret: process.env.JWT_SECRET!,
   providers: [
-    CredentialsProvider({
-      credentials: { email: { label: "Email", type: "email" }, password: { label: "Password", type: "password" } },
-      authorize: async (c) => {
-        const user = await lookup(c.email);
-        if (!user || !(await verifyPassword(user.hash, c.password))) return null;
+    google({ clientId: "...", clientSecret: "..." }),
+    github({ clientId: "...", clientSecret: "..." }),
+    credentials({
+      authorize: async ({ email, password }) => {
+        const user = await lookupUser(email);
+        if (!user || !verifyPassword(user.password, password)) return null;
         return { id: user.id, email: user.email };
       },
     }),
@@ -77,26 +27,85 @@ const auth = createAuth({
 });
 ```
 
-## Cookies & callbacks
+| Provider | Import | Config |
+| --- | --- | --- |
+| Google | `google` | `{ clientId, clientSecret, scope? }` |
+| GitHub | `github` | `{ clientId, clientSecret, scope? }` |
+| Password | `credentials` | `{ authorize: (creds) => User \| null }` |
 
-- Sessions are stateless JWTs in HTTP-only cookies (`setSessionCookie` /
-  `clearSessionCookie`).
-- Callbacks (`signIn`, `redirect`, `jwt`, `session`) and events (`createUser`,
-  `signIn`) mirror NextAuth.
-- For Postgres-backed storage, pass `createPgAdapter(...)` as `adapter`.
+## OAuth flow
+
+```ts
+// Step 1 — redirect the user to the provider
+const url = await auth.signIn("google");
+// redirect user to url
+```
+
+Sets `identifier: state:<random>` in `authVerificationTokens` for CSRF
+protection (expires 10 minutes).
+
+```ts
+// Step 2 — handle the callback
+const result = await auth.handleCallback("google", {
+  code: req.query.code,
+  state: req.query.state,
+});
+// { user, session, token } | throws ProviderError
+```
+
+The callback validates the state (CSRF), exchanges the code for tokens,
+fetches user info, and creates or links an account in `authAccounts`.
+
+## Callbacks
+
+The `Auth` config supports lifecycle callbacks:
+
+```ts
+createAuth({
+  db, secret,
+  providers: [/* ... */],
+  callbacks: {
+    onRegister: async (user) => { /* welcome email */ },
+    onLogin: async (user) => { /* audit log */ },
+    onLogout: async (session) => { /* cleanup */ },
+    onSession: async (session) => { /* enrich session data */ },
+  },
+});
+```
+
+## Credentials provider
+
+The `credentials` provider lets you authenticate with email + password. Your
+`authorize` function receives the form data and returns a `User` or `null`.
+
+```ts
+credentials({
+  authorize: async ({ email, password }) => {
+    const user = await db.query(authUsers).where("email", "=", email).findOne();
+    if (!user?.password) return null;
+    if (!verifyPassword(password, user.password)) return null;
+    return { id: user.id, email: user.email };
+  },
+});
+```
+
+<Aside type="tip" title="Rate limiting built-in">
+The `Auth` class includes an `InMemoryRateLimiter` on login (5 attempts per
+minute per email). Too many failures returns `UnauthorizedError`.
+</Aside>
 
 ## Best practices
 
-- Keep `MountAuth` out of the hot path — verify with `verifyPassword` + `signJwt`.
-- Store the JWT secret in an env var, not code.
-- Enable `rateLimit` on the credentials provider.
+- Scope OAuth providers to the minimum `scope` your app needs.
+- Use `credentials` for email/password; use OAuth providers for social login.
+- Validate email is verified on the OAuth provider before creating the user.
 
 ## Common mistakes
 
-- Ignoring a `null` result from `handleCallback` (means CSRF/PKCE failed).
-- Using `MemoryTokenStore` in production (use `createPgAdapter`).
+- Expecting `handleCallback` to accept a response object (it receives params, not `res`).
+- Forgetting to pass `providers` in the config — `auth.signIn` throws `ProviderError`.
 
 ## Related
 
-- [Sessions](/auth/sessions/) — the `TokenStore` behind adapters.
-- [Passwords & JWT](/auth/passwords-jwt/) — the crypto primitives.
+- [Sessions](/auth/sessions/) — what `handleCallback` returns.
+- [Passwords & JWT](/auth/passwords-jwt/) — how tokens work.

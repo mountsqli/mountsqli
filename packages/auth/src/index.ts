@@ -1,83 +1,104 @@
 /**
- * MountSQLI Auth — Main entry point.
- *
- * Provides two layers:
- *  - NextAuth.js-style framework (`MountAuth`, `createAuth`, providers, adapter).
- *  - Lower-level primitives used by the example apps and the test suite
- *    (crypto, RBAC, RLS policy DSL, session/token stores).
+ * @mountsqli/auth — Pre-built authentication system for MountSQLi.
  */
 
-// NextAuth.js-style framework
-export { MountAuth, createAuth } from "./core/auth.js";
-export { createPgAdapter } from "./adapters/pg.js";
-export {
-  GoogleProvider,
-  GitHubProvider,
-  DiscordProvider,
-  TwitterProvider,
-  CredentialsProvider,
-  generateCodeVerifier,
-  generateCodeChallenge,
-  generateState,
-} from "./providers/index.js";
+// Main entry
+export { Auth } from './core/auth.js';
+import { Auth } from './core/auth.js';
+import type { AuthConfig } from './types.js';
 
-// Crypto primitives
-export {
-  hashPassword,
-  verifyPassword,
-  signJwt,
-  verifyJwt,
-  generateEddsaKeys,
-} from "./crypto.js";
+/**
+ * Create an Auth instance.
+ */
+export function createAuth(config: AuthConfig): Auth {
+  return new Auth(config);
+}
 
-// RBAC + RLS policy DSL
-export { Rbac } from "./rbac.js";
-export { MemoryRateLimiter, type RateLimiter, type RateLimitConfig } from "./rate-limit.js";
+// Schema tables
 export {
-  applyPolicy,
-  applyPolicies,
-} from "./rls.js";
-export {
-  allowOwner,
-  allowTenant,
-  allowPublic,
-  allowRole,
-  andPolicies,
-  compilePolicy,
-} from "./policy.js";
+  authUsers,
+  authSessions,
+  authAccounts,
+  authVerificationTokens,
+  authRoles,
+  authUserRoles,
+} from './schema/index.js';
 
-// Session + token stores (legacy facade)
+// Providers
+export { credentials, type CredentialsProviderConfig } from './providers/credentials.js';
+export { google, type GoogleProviderConfig } from './providers/google.js';
+export { github, type GitHubProviderConfig } from './providers/github.js';
+
+// Middleware
 export {
-  Auth,
-  MemoryTokenStore,
-  SqliteTokenStore,
-  PgTokenStore,
-} from "./session.js";
+  resolveAuth,
+  expressMiddleware,
+  requireAuth,
+  nextjsMiddleware,
+  nextjsApiAuth,
+  fastifyPlugin,
+  requireAuthFastify,
+  honoMiddleware,
+  requireAuthHono,
+  type ExpressAuthMiddlewareOptions,
+  type NextAuthMiddlewareOptions,
+  type FastifyAuthMiddlewareOptions,
+  type HonoAuthMiddlewareOptions,
+} from './middleware/index.js';
+
+// Password utilities
+export { hashPassword, verifyPassword } from './core/password.js';
+
+// JWT utilities
+export { createToken, verifyToken, decodeToken } from './core/jwt.js';
+
+// TOTP utilities
+export { generateSecret, generateCode, verifyCode, generateURI } from './core/totp.js';
+
+// RLS policy helpers (used by @mountsqli/storage and others)
+export { compilePolicy } from './core/policy.js';
+export type { Policy, PolicyContext } from './core/policy.js';
+
+// Email
+export { ConsoleEmailAdapter, sendVerificationEmail, sendPasswordResetEmail } from './core/email.js';
+export type { EmailAdapter } from './core/email.js';
+
+// Errors
+export {
+  AuthError,
+  UnauthorizedError,
+  ForbiddenError,
+  InvalidCredentialsError,
+  UserNotFoundError,
+  EmailAlreadyExistsError,
+  InvalidTokenError,
+  TwoFactorRequiredError,
+  TwoFactorInvalidError,
+  SessionExpiredError,
+  ProviderError,
+} from './errors.js';
 
 // Types
 export type {
-  Provider,
-  User,
-  Session,
-  Account,
-  Adapter,
-  Callbacks,
-  Events,
   AuthConfig,
-  CookieOptions,
+  SessionConfig,
+  PagesConfig,
+  CallbacksConfig,
+  User,
+  CreateUserInput,
+  Session,
+  SessionData,
+  AuthResult,
+  AuthProvider,
+  CredentialsProvider,
+  OAuthProvider,
+  EmailProvider,
+  Role,
+  UserRole,
+  MiddlewareOptions,
+  AuthMiddlewareResult,
   JWTPayload,
-  OAuthConfig,
-  CredentialsConfig,
-} from "./types/index.js";
-
-// Policy / RLS types
-export type {
-  Policy,
-  PolicyContext,
-  PolicyRule,
-} from "./policy.js";
-
-// RLS policy registry (issue 003) — register per-table default policies and
-// enforce their application at query time via `enforceRls` in mount config.
-export { createPolicyRegistry } from "./policy-registry.js";
-export type { PolicyRegistry } from "./policy-registry.js";
+  OAuthCallbackParams,
+  OAuthTokenResponse,
+  OAuthUserInfo,
+} from './types.js';

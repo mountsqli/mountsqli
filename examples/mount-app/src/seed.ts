@@ -17,7 +17,7 @@ async function seed() {
 
   // ── Users ─────────────────────────────────────────────────────────────
 
-  const pwh = hashPassword("password123");
+  const pwh = await hashPassword("password123");
   const userData = [
     { username: "alice",   display_name: "Alice Wonder",   email: "alice@test.com",   role: "admin",    points: 1500, active: true,  metadata: { theme: "dark", notifications: true }, password_hash: pwh },
     { username: "bob",     display_name: "Bob Builder",     email: "bob@test.com",     role: "user",     points: 850,  active: true,  metadata: { theme: "light", notifications: false }, password_hash: pwh },

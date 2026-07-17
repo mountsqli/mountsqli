@@ -1,69 +1,78 @@
 ---
 title: Sessions
-description: Issue and verify sessions with the Auth facade and a pluggable TokenStore.
+description: How the Auth class manages sessions — JWT and database-backed strategies.
 ---
-import { Aside } from '@astrojs/starlight/components';
 
+The `Auth` class issues sessions on registration and login. It supports two
+strategies: **JWT** (stateless) and **database** (stored in `authSessions`).
 
-The `Auth` facade issues JWTs and persists sessions through a `TokenStore`. It
-is storage-agnostic — it depends only on a small `TokenStore` interface.
+## Session strategies
 
-## Create the facade
+Set the strategy in the auth config:
 
 ```ts
-import { Auth, MemoryTokenStore } from "@mountsqli/auth";
-
-const auth = new Auth({ jwtKey: "secret", store: new MemoryTokenStore() });
+const auth = createAuth({
+  db,
+  secret: "my-secret",
+  session: { strategy: "jwt", maxAge: 3600 }, // or "database"
+  providers: [],
+});
 ```
 
-## Login / authenticate / logout
+- **JWT** — token carries the user info; no server-side lookup on each request.
+  Revocation relies on expiry. Fastest for most apps.
+- **Database** — session stored in `authSessions`. Token is looked up on each
+  request, enabling server-side revocation.
+
+## Session lifecycle
+
+Sessions are created automatically by `register()` and `login()`:
 
 ```ts
-const { token } = await auth.login({ userId: 1, roles: ["user"], claims: { tenantId: 2 } });
+const { user, session, token } = await auth.register({
+  email: "ada@example.com",
+  password: "StrongP4ss!",
+});
 
-const r = await auth.authenticate(token);
-// r.ok === true, r.user.userId === "1"
+// user.email === "ada@example.com"
+// token is a JWT you send to the client
+```
 
+To validate a request:
+
+```ts
+const session = await auth.getSession({
+  headers: { authorization: "Bearer <token>" },
+});
+// SessionData | null
+```
+
+## Logout
+
+```ts
 await auth.logout(token);
-// authenticate(token) now returns { ok: false }
+// For database strategy, the session is deleted.
+// For JWT strategy, reliance is on token expiry.
 ```
 
-## TokenStore implementations
+## Token extraction
 
-| Store | Survives restart? | Cross-instance? | Use |
-| --- | --- | --- | --- |
-| `MemoryTokenStore` | no | no | tests, single process |
-| `SqliteTokenStore` | yes | no | simple file-backed |
-| `PgTokenStore` | yes | yes | production (Postgres) |
-
-<Aside type="caution" title="Production sessions">
-The default `MemoryTokenStore` loses sessions on restart and isn't shared across
-instances. For production, use `PgTokenStore` (via `createPgAdapter`) or a shared
-store. See audit item #13.
-</Aside>
-
-## AuthConfig
-
-| Field | Effect |
-| --- | --- |
-| `jwtKey` | HS256 secret or EdDSA private key PEM |
-| `jwtAlg` | `"HS256"` (default) or `"EdDSA"` |
-| `sessionTtlSec` | session lifetime (default 3600) |
-| `store` | a `TokenStore` (defaults to in-memory) |
-| `rateLimit` | opt-in brute-force config |
-| `rateLimiter` | inject a shared `RateLimiter` (takes precedence) |
+`getSession` extracts the token from:
+1. `Authorization: Bearer <token>` header (preferred)
+2. `auth-token=<token>` cookie (fallback)
 
 ## Best practices
 
-- Inject a shared `TokenStore` (Pg/Redis) in multi-instance deployments.
-- Keep sessions stateless (JWT) when you don't need server-side revocation.
+- Use **JWT** strategy for most apps (no per-request DB lookup).
+- Use **database** strategy when you need immediate revocation.
+- Set `maxAge` to match your app's session lifetime (default 30 days).
 
 ## Common mistakes
 
-- Using `MemoryTokenStore` in production — sessions vanish on restart.
-- Storing the JWT secret in code — load it from env.
+- Using database strategy on every request for a mobile app (latency).
+- Not handling `null` from `getSession` — always check.
 
 ## Related
 
-- [Passwords & JWT](/auth/passwords-jwt/) — the crypto underneath.
-- [Rate Limiting](/auth/rate-limiting/) — protect login.
+- [Passwords & JWT](/auth/passwords-jwt/) — the tokens used for sessions.
+- [OAuth & Providers](/auth/oauth/) — social login creates sessions too.

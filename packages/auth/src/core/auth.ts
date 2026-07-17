@@ -1,317 +1,705 @@
 /**
- * MountSQLI Auth — NextAuth.js compatible core.
- * Handles JWT/database sessions, provider flows, callbacks, events.
+ * Main Auth class — orchestrates all auth functionality.
  */
 
-import { MountError } from "@mountsqli/driver";
-import { signJwt, verifyJwt, hashPassword as scryptHash, verifyPassword as scryptVerify } from "../crypto.js";
-import { MemoryRateLimiter, type RateLimiter } from "../rate-limit.js";
-import { generateState, generateCodeVerifier, generateCodeChallenge } from "../providers/index.js";
-import { createPgAdapter } from "../adapters/pg.js";
+import { eq } from '@mountsqli/core';
+import { createHash, createCipheriv, createDecipheriv, randomBytes, createHmac, randomUUID } from 'node:crypto';
+import { hashPassword, verifyPassword } from './password.js';
+import {
+  createSession as createSessionFn,
+  validateSession as validateSessionFn,
+  revokeSession as revokeSessionFn,
+  revokeAllSessions as revokeAllSessionsFn,
+} from './session-manager.js';
+import { generateSecret, generateCode, verifyCode, generateURI } from './totp.js';
+import {
+  getAuthorizationUrl,
+  exchangeCode,
+  getUserInfo,
+  generateState,
+} from './oauth.js';
+import {
+  createRole as createRoleFn,
+  deleteRole as deleteRoleFn,
+  getRoleByName,
+  assignRole as assignRoleFn,
+  removeRole as removeRoleFn,
+  getUserRoles as getUserRolesFn,
+  hasRole as hasRoleFn,
+  hasPermission as hasPermissionFn,
+} from './rbac.js';
+import { ConsoleEmailAdapter, sendVerificationEmail, sendPasswordResetEmail } from './email.js';
+import { InMemoryRateLimiter, type RateLimiter } from './rate-limiter.js';
+import type { EmailAdapter } from './email.js';
+import {
+  UnauthorizedError,
+  InvalidCredentialsError,
+  EmailAlreadyExistsError,
+  UserNotFoundError,
+  TwoFactorRequiredError,
+  TwoFactorInvalidError,
+  ProviderError,
+} from '../errors.js';
 import type {
   AuthConfig,
-  Provider,
   User,
-  Session,
-  Account,
-  Adapter,
-  Callbacks,
-  Events,
-  CookieOptions,
-} from "../types/index.js";
+  AuthResult,
+  SessionData,
+  MiddlewareOptions,
+  AuthMiddlewareResult,
+  CredentialsProvider,
+  OAuthProvider,
+  Role,
+  CallbacksConfig,
+} from '../types.js';
 
-export class MountAuth {
-  private config: AuthConfig;
-  private adapter?: Adapter;
-  private cookieName: string;
-  private cookieOpts: CookieOptions;
-  private jwtMaxAge: number;
-  private jwtSecret: string;
-  private rateLimiter?: RateLimiter;
+// ---------------------------------------------------------------------------
+// Token encryption helpers
+// ---------------------------------------------------------------------------
+
+async function encryptToken(token: string, secret: string): Promise<string> {
+  const key = createHash('sha256').update(secret).digest();
+  const iv = randomBytes(16);
+  const cipher = createCipheriv('aes-256-gcm', key, iv);
+  const encrypted = Buffer.concat([cipher.update(token, 'utf8'), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+  return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted.toString('hex')}`;
+}
+
+async function decryptToken(encrypted: string, secret: string): Promise<string> {
+  const key = createHash('sha256').update(secret).digest();
+  const [ivHex, tagHex, dataHex] = encrypted.split(':');
+  const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(ivHex!, 'hex'));
+  decipher.setAuthTag(Buffer.from(tagHex!, 'hex'));
+  const decrypted = Buffer.concat([decipher.update(Buffer.from(dataHex!, 'hex')), decipher.final()]);
+  return decrypted.toString('utf8');
+}
+
+// ---------------------------------------------------------------------------
+// Auth class
+// ---------------------------------------------------------------------------
+
+export class Auth {
+  private db: any;
+  private secret: string;
+  private sessionConfig: { strategy: 'jwt' | 'database'; maxAge: number };
+  private callbacks?: CallbacksConfig;
+  private rateLimiter: RateLimiter;
+  private emailAdapter: EmailAdapter;
+  private providers: any[];
+
+  // Table references
+  private usersTable: any;
+  private sessionsTable: any;
+  private accountsTable: any;
+  private verificationTable: any;
+  private rolesTable: any;
+  private userRolesTable: any;
 
   constructor(config: AuthConfig) {
-    this.config = config;
-    if (config.adapter) {
-      this.adapter = config.adapter;
-    }
-    const cookies = {
-      sessionToken: { name: "mountsqli.session-token", options: { httpOnly: true, sameSite: "lax" as const, path: "/", secure: true } },
-      callbackUrl: { name: "mountsqli.callback-url", options: { httpOnly: true, sameSite: "lax" as const, path: "/", secure: true } },
-      csrfToken: { name: "mountsqli.csrf-token", options: { httpOnly: true, sameSite: "lax" as const, path: "/", secure: true } },
-      pkceVerifier: { name: "mountsqli.pkce-verifier", options: { httpOnly: true, sameSite: "lax" as const, path: "/", secure: true } },
-      ...config.cookies,
+    this.db = config.db;
+    this.secret = config.secret;
+    this.sessionConfig = {
+      strategy: config.session?.strategy ?? 'jwt',
+      maxAge: config.session?.maxAge ?? 30 * 24 * 60 * 60,
     };
-    this.config.cookies = cookies;
-    this.cookieName = cookies.sessionToken.name;
-    this.cookieOpts = { ...cookies.sessionToken.options, maxAge: config.jwt.maxAge ?? 30 * 24 * 60 * 60 };
-    this.jwtMaxAge = config.jwt.maxAge ?? 30 * 24 * 60 * 60;
-    this.jwtSecret = config.jwt.secret ?? config.secret ?? "";
-    if (config.rateLimit) this.rateLimiter = new MemoryRateLimiter(config.rateLimit);
+    this.callbacks = config.callbacks;
+    this.rateLimiter = new InMemoryRateLimiter({ maxRequests: 5, windowMs: 60000 });
+    this.emailAdapter = new ConsoleEmailAdapter();
+    this.providers = config.providers ?? [];
+
+    // Table references — prefer explicit config.tables, else auto-discover from db.tables
+    const explicitTables = (config as any).tables ?? {};
+    const dbTables: any[] = (this.db as any).tables ?? [];
+    const findTable = (name: string, fallback: any) =>
+      explicitTables[fallback] ?? dbTables.find((t: any) => t?.__name === name);
+    this.usersTable = findTable('auth_users', 'users');
+    this.sessionsTable = findTable('auth_sessions', 'sessions');
+    this.accountsTable = findTable('auth_accounts', 'accounts');
+    this.verificationTable = findTable('auth_verification_tokens', 'verification');
+    this.rolesTable = findTable('auth_roles', 'roles');
+    this.userRolesTable = findTable('auth_user_roles', 'userRoles');
   }
 
-  // JWT encoding/decoding
-  private async encodeToken(token: Record<string, unknown>): Promise<string> {
-    const { encode } = this.config.jwt;
-    if (encode) return encode({ token, secret: this.jwtSecret, maxAge: this.jwtMaxAge });
-    const { signJwt } = await import("../crypto.js");
-    return signJwt(token, { key: this.jwtSecret, expiresInSec: this.jwtMaxAge });
-  }
+  // ---------------------------------------------------------------------------
+  // Register
+  // ---------------------------------------------------------------------------
 
-  private async decodeToken(token: string): Promise<Record<string, unknown> | null> {
-    const { decode } = this.config.jwt;
-    if (decode) return decode({ token, secret: this.jwtSecret });
-    const { verifyJwt } = await import("../crypto.js");
-    const result = verifyJwt(token, { key: this.jwtSecret });
-    return result.ok ? (result.payload ?? null) : null;
-  }
-
-  // Cookie helpers
-  private setCookie(res: Response, name: string, value: string, options: CookieOptions): void {
-    const parts = [
-      `${name}=${value}`,
-      `Path=${options.path ?? "/"}`,
-      `HttpOnly`,
-      options.secure ? `Secure` : "",
-      `SameSite=${options.sameSite ?? "lax"}`,
-      options.maxAge != null ? `Max-Age=${options.maxAge}` : "",
-      options.domain ? `Domain=${options.domain}` : "",
-    ].filter(Boolean);
-    res.headers.append("Set-Cookie", parts.join("; "));
-  }
-
-  private clearCookie(res: Response, name: string, options: CookieOptions): void {
-    this.setCookie(res, name, "", { ...options, maxAge: 0 });
-  }
-
-  // Session handling
-  async getSession(requestHeaders: Headers): Promise<Session | null> {
-    const cookieHeader = requestHeaders.get("cookie") || "";
-    const cookies = this.parseCookies(cookieHeader);
-    const sessionCookie = cookies.get(this.cookieName);
-    if (!sessionCookie) return null;
-
-    const token = await this.decodeToken(sessionCookie);
-    if (!token) return null;
-
-    const exp = typeof token.exp === "number" ? token.exp : 0;
-    if (exp && Date.now() >= exp * 1000) {
-      return null;
+  async register(data: { email: string; password: string; name?: string }): Promise<AuthResult> {
+    // Validate password
+    const passwordValidation = this.isValidPassword(data.password);
+    if (!passwordValidation.valid) {
+      throw new InvalidCredentialsError(passwordValidation.errors.join('. '));
     }
 
-    const fromToken: User = {
-      id: typeof token.sub === "string" ? token.sub : "",
-      name: typeof token.name === "string" ? token.name : null,
-      email: typeof token.email === "string" ? token.email : null,
-      image: typeof token.picture === "string" ? token.picture : null,
-    };
-    const user = (token.user as User | undefined) ?? fromToken;
-    return {
-      user,
-      expires: new Date(exp * 1000).toISOString(),
-    };
-  }
-
-  async signIn(credentials: Record<string, string>): Promise<{ user: User; token: string } | null> {
-    const credentialsProvider = this.config.providers.find(
-      (p): p is Extract<Provider, { type: "credentials" }> => p.type === "credentials",
-    );
-    if (!credentialsProvider) throw new MountError("CONFIG", "MountSQLI: no credentials provider configured — add a CredentialsProvider to your MountAuth providers.");
-
-    // OPT-IN brute-force guard (AuthConfig.rateLimit). Key by the credential
-    // identifier so each account is rate-limited independently.
-    if (this.rateLimiter) {
-      const key = String(credentials.id ?? credentials.email ?? credentials.username ?? "unknown");
-      if (this.rateLimiter.isLocked(key)) return null;
-      const user = await credentialsProvider.authorize(credentials);
-      if (!user) {
-        this.rateLimiter.recordFailure(key);
-        return null;
-      }
-      this.rateLimiter.reset(key);
-      const token = await this.createToken({ user, isNewUser: false });
-      return { user, token };
+    // Check if user already exists
+    const existing = await this.db.query(this.usersTable).where('email', '=', data.email).findOne();
+    if (existing) {
+      throw new EmailAlreadyExistsError();
     }
 
-    const user = await credentialsProvider.authorize(credentials);
-    if (!user) return null;
+    // Hash password
+    const hashedPassword = await hashPassword(data.password);
 
-    const token = await this.createToken({ user, isNewUser: false });
-    return { user, token };
-  }
-
-  async signOut(): Promise<void> {
-    // Client should clear cookie; server can't delete HttpOnly cookie
-  }
-
-  /** Set the session cookie on a Response (used by Next.js route handlers). */
-  setSessionCookie(res: Response, token: string): void {
-    this.setCookie(res, this.cookieName, token, this.cookieOpts);
-  }
-
-  /** Clear the session cookie on a Response (logout). */
-  clearSessionCookie(res: Response): void {
-    this.clearCookie(res, this.cookieName, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "lax",
-      path: "/",
+    // Create user
+    const { rows: [user] } = await this.db.query(this.usersTable).returning().insert({
+      id: randomUUID(),
+      email: data.email,
+      password: hashedPassword,
+      name: data.name ?? null,
     });
+
+    const sanitizedUser = this.sanitizeUser(user);
+
+    // Create session
+    const result = await createSessionFn(
+      {
+        db: this.db,
+        secret: this.secret,
+        strategy: this.sessionConfig.strategy,
+        maxAge: this.sessionConfig.maxAge,
+        sessionsTable: this.sessionsTable,
+        usersTable: this.usersTable,
+      },
+      sanitizedUser,
+    );
+
+    // Call onRegister callback
+    await this.callbacks?.onRegister?.(sanitizedUser);
+
+    return result;
   }
 
-  private async createToken(params: { user: User; account?: Account; profile?: any; isNewUser?: boolean }): Promise<string> {
-    const token: Record<string, unknown> = {
-      sub: params.user.id,
-      name: params.user.name,
-      email: params.user.email,
-      picture: params.user.image,
-      iat: Math.floor(Date.now() / 1000),
-      exp: Math.floor(Date.now() / 1000) + this.jwtMaxAge,
-    };
+  // ---------------------------------------------------------------------------
+  // Login
+  // ---------------------------------------------------------------------------
 
-    const jwtCallback = this.config.callbacks?.jwt;
-    if (jwtCallback) {
-      const result = await jwtCallback({ token, user: params.user, account: params.account, profile: params.profile, isNewUser: params.isNewUser });
-      if (result) Object.assign(token, result);
+  async login(
+    providerId: string,
+    credentials: Record<string, string>,
+  ): Promise<AuthResult> {
+    const provider = this.providers.find((p) => p.id === providerId);
+    if (!provider) {
+      throw new ProviderError(`Provider "${providerId}" not found`);
     }
 
-    return this.encodeToken(token);
-  }
-
-  // Callback runners
-  async runSignInCallback(params: { user: User; account: Account | null; profile?: any; email?: { verificationRequest?: boolean }; credentials?: Record<string, string> }): Promise<string | boolean> {
-    const signIn = this.config.callbacks?.signIn;
-    if (signIn) return signIn(params);
-    return true;
-  }
-
-  async runRedirectCallback(params: { url: string; baseUrl: string }): Promise<string> {
-    const redirect = this.config.callbacks?.redirect;
-    if (redirect) return redirect(params);
-    return params.url;
-  }
-
-  // Event emitters
-  async emitCreateUser(user: User) {
-    if (this.config.events?.createUser) await this.config.events.createUser(user);
-  }
-
-  async emitSignIn(user: User, account: Account | null, isNewUser: boolean) {
-    if (this.config.events?.signIn) await this.config.events.signIn({ user, account, isNewUser });
-  }
-
-  // Provider utilities
-  getProvider(id: string): Provider | undefined {
-    return this.config.providers.find((p) => p.id === id);
-  }
-
-  getProviders(): Provider[] {
-    return this.config.providers;
-  }
-
-  /**
-   * Begin an OAuth 2.0 authorization-code flow. Generates a CSRF `state`
-   * and (for PKCE-capable providers) a `code_verifier`, stores BOTH in
-   * HttpOnly cookies, and returns the provider's authorization URL. The
-   * cookies MUST be present (and verified) when `handleCallback` runs — this
-   * is what prevents login-CSRF / authorization-code injection.
-   */
-  async getAuthorizationUrl(providerId: string, res: Response): Promise<string> {
-    const provider = this.getProvider(providerId);
-    if (!provider || (provider.type !== "oauth" && provider.type !== "oidc")) {
-      throw new MountError("CONFIG", `MountSQLI: unknown OAuth provider "${providerId}"`);
+    if (provider.type === 'credentials') {
+      return this.loginWithCredentials(provider as CredentialsProvider, credentials);
     }
+
+    throw new ProviderError(`Provider "${providerId}" is not a credentials provider`);
+  }
+
+  private async loginWithCredentials(
+    provider: CredentialsProvider,
+    credentials: Record<string, string>,
+  ): Promise<AuthResult> {
+    const { email, password } = credentials;
+    if (!email || !password) {
+      throw new InvalidCredentialsError();
+    }
+
+    // Rate limit by email
+    const rateLimitResult = await this.rateLimiter.check(`login:${email}`);
+    if (!rateLimitResult.allowed) {
+      throw new UnauthorizedError('Too many login attempts. Please try again later.');
+    }
+
+    // Find user
+    const user = await this.db.query(this.usersTable).where('email', '=', email).findOne();
+    if (!user || !user.password) {
+      throw new InvalidCredentialsError();
+    }
+
+    // Verify password
+    const valid = await verifyPassword(password, user.password);
+    if (!valid) {
+      throw new InvalidCredentialsError();
+    }
+
+    // Check 2FA
+    if (user.twoFactorEnabled) {
+      const code = credentials.totp;
+      if (!code) {
+        throw new TwoFactorRequiredError();
+      }
+
+      if (!user.twoFactorSecret || !verifyCode(user.twoFactorSecret, code)) {
+        throw new TwoFactorInvalidError();
+      }
+    }
+
+    const sanitizedUser = this.sanitizeUser(user);
+
+    // Create session
+    const result = await createSessionFn(
+      {
+        db: this.db,
+        secret: this.secret,
+        strategy: this.sessionConfig.strategy,
+        maxAge: this.sessionConfig.maxAge,
+        sessionsTable: this.sessionsTable,
+        usersTable: this.usersTable,
+      },
+      sanitizedUser,
+    );
+
+    // Call onLogin callback
+    await this.callbacks?.onLogin?.(sanitizedUser);
+
+    return result;
+  }
+
+  // ---------------------------------------------------------------------------
+  // OAuth
+  // ---------------------------------------------------------------------------
+
+  async signIn(providerId: string): Promise<string> {
+    const provider = this.providers.find((p) => p.id === providerId);
+    if (!provider || provider.type !== 'oauth') {
+      throw new ProviderError(`OAuth provider "${providerId}" not found`);
+    }
+
     const state = generateState();
-    this.setCookie(res, this.config.cookies!.csrfToken!.name, state, this.cookieOpts);
-    let codeChallenge: string | undefined;
-    if (provider.supportsPkce) {
-      const verifier = generateCodeVerifier();
-      this.setCookie(res, this.config.cookies!.pkceVerifier!.name, verifier, this.cookieOpts);
-      codeChallenge = await generateCodeChallenge(verifier);
-    }
-    return provider.authorizeUrl(state, codeChallenge);
+
+    // Store state for CSRF validation (expires in 10 minutes)
+    await this.db.query(this.verificationTable).insert({
+      identifier: `state:${state}`,
+      token: state,
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+    });
+
+    return getAuthorizationUrl(provider as OAuthProvider, state);
   }
 
-  /**
-   * Complete the OAuth flow. Verifies the callback `state` matches the
-   * `csrfToken` cookie (CSRF protection) and, for PKCE providers, that
-   * the `code_verifier` cookie is supplied to `exchangeCode`. On success
-   * returns `{ user, token }`; on any mismatch returns `null` and clears
-   * the flow cookies.
-   */
   async handleCallback(
     providerId: string,
-    code: string,
-    state: string | null,
-    reqHeaders: Headers,
-    res: Response,
-  ): Promise<{ user: User; token: string } | null> {
-    const provider = this.getProvider(providerId);
-    if (!provider || (provider.type !== "oauth" && provider.type !== "oidc")) return null;
-
-    // CSRF: the callback state must match the cookie we set at redirect.
-    const cookies = this.parseCookies(reqHeaders.get("cookie") || "");
-    const expectedState = cookies.get(this.config.cookies!.csrfToken!.name);
-    if (!state || !expectedState || state !== expectedState) {
-      this.clearCookie(res, this.config.cookies!.csrfToken!.name, this.cookieOpts);
-      return null;
+    params: { code?: string; state?: string; error?: string },
+  ): Promise<AuthResult> {
+    if (params.error) {
+      throw new ProviderError(`OAuth error: ${params.error}`);
     }
 
-    // PKCE: pass the stored verifier to the token exchange.
-    const verifier = provider.supportsPkce
-      ? cookies.get(this.config.cookies!.pkceVerifier!.name)
-      : undefined;
+    if (!params.code) {
+      throw new ProviderError('Missing authorization code');
+    }
 
-    try {
-      const profile = await provider.exchangeCode(code, verifier);
-      if (!profile) return null;
-      const user: User = {
-        id: String(profile.id),
-        name: profile.name,
-        email: profile.email,
-        image: profile.avatar ?? null,
-      };
-      const token = await this.createToken({ user, isNewUser: false });
-      // Consume the flow cookies.
-      this.clearCookie(res, this.config.cookies!.csrfToken!.name, this.cookieOpts);
-      if (provider.supportsPkce) {
-        this.clearCookie(res, this.config.cookies!.pkceVerifier!.name, this.cookieOpts);
+    // Validate OAuth state (CSRF protection)
+    if (params.state) {
+      const stored = await this.db.query(this.verificationTable)
+        .where('identifier', '=', `state:${params.state}`)
+        .findOne();
+
+      if (!stored || stored.expiresAt < new Date()) {
+        throw new ProviderError('Invalid or expired OAuth state');
       }
-      return { user, token };
-    } catch {
-      return null;
+
+      // Delete used state
+      await this.db.query(this.verificationTable)
+        .where('identifier', '=', `state:${params.state}`)
+        .delete();
     }
-  }
 
-  // Adapter access
-  getAdapter(): Adapter | undefined {
-    return this.adapter;
-  }
-
-  // Parse cookies
-  private parseCookies(cookieHeader: string): Map<string, string> {
-    const cookies = new Map<string, string>();
-    for (const cookie of cookieHeader.split(";")) {
-      const [name, ...rest] = cookie.trim().split("=");
-      if (name && rest.length) cookies.set(name, rest.join("="));
+    const provider = this.providers.find((p) => p.id === providerId);
+    if (!provider || provider.type !== 'oauth') {
+      throw new ProviderError(`OAuth provider "${providerId}" not found`);
     }
-    return cookies;
+
+    const oauthProvider = provider as OAuthProvider;
+
+    // Exchange code for tokens
+    const tokenResponse = await exchangeCode(oauthProvider, params.code);
+
+    // Get user info
+    const userInfo = await getUserInfo(oauthProvider, tokenResponse.access_token);
+
+    // Check if email is verified on OAuth provider
+    if (!userInfo.emailVerified) {
+      throw new ProviderError('Email not verified on OAuth provider');
+    }
+
+    // Find or create user
+    let user = await this.db.query(this.usersTable)
+      .where('email', '=', userInfo.email)
+      .findOne();
+
+    if (!user) {
+      // Create new user
+      const { rows: [newUser] } = await this.db.query(this.usersTable)
+        .returning()
+        .insert({
+          id: randomUUID(),
+          email: userInfo.email,
+          name: userInfo.name ?? null,
+          image: userInfo.image ?? null,
+          emailVerified: new Date(),
+        });
+
+      user = newUser;
+
+      // Store OAuth account with encrypted tokens
+      const encryptedAccessToken = await encryptToken(tokenResponse.access_token, this.secret);
+      const encryptedRefreshToken = tokenResponse.refresh_token
+        ? await encryptToken(tokenResponse.refresh_token, this.secret)
+        : null;
+
+      await this.db.query(this.accountsTable).insert({
+        userId: user.id,
+        provider: providerId,
+        providerAccountId: userInfo.id,
+        accessToken: encryptedAccessToken,
+        refreshToken: encryptedRefreshToken,
+      });
+
+      await this.callbacks?.onRegister?.(this.sanitizeUser(user));
+    } else {
+      // Update existing account
+      const existingAccount = await this.db.query(this.accountsTable)
+        .where('userId', '=', user.id)
+        .where('provider', '=', providerId)
+        .findOne();
+
+      if (existingAccount) {
+        const encryptedAccessToken = await encryptToken(tokenResponse.access_token, this.secret);
+        const encryptedRefreshToken = tokenResponse.refresh_token
+          ? await encryptToken(tokenResponse.refresh_token, this.secret)
+          : null;
+
+        await this.db.query(this.accountsTable)
+          .where('id', '=', existingAccount.id)
+          .update({
+            accessToken: encryptedAccessToken,
+            refreshToken: encryptedRefreshToken,
+          });
+      } else {
+        const encryptedAccessToken = await encryptToken(tokenResponse.access_token, this.secret);
+        const encryptedRefreshToken = tokenResponse.refresh_token
+          ? await encryptToken(tokenResponse.refresh_token, this.secret)
+          : null;
+
+        await this.db.query(this.accountsTable).insert({
+          userId: user.id,
+          provider: providerId,
+          providerAccountId: userInfo.id,
+          accessToken: encryptedAccessToken,
+          refreshToken: encryptedRefreshToken,
+        });
+      }
+    }
+
+    const sanitizedUser = this.sanitizeUser(user);
+
+    const result = await createSessionFn(
+      {
+        db: this.db,
+        secret: this.secret,
+        strategy: this.sessionConfig.strategy,
+        maxAge: this.sessionConfig.maxAge,
+        sessionsTable: this.sessionsTable,
+        usersTable: this.usersTable,
+      },
+      sanitizedUser,
+    );
+
+    await this.callbacks?.onLogin?.(sanitizedUser);
+
+    return result;
   }
 
-  // Password helpers (scrypt, constant-time verify)
-  hashPassword(password: string): string {
-    return scryptHash(password);
+  // ---------------------------------------------------------------------------
+  // Session
+  // ---------------------------------------------------------------------------
+
+  async getSession(request: { headers?: Record<string, string | undefined> }): Promise<SessionData | null> {
+    const token = this.extractToken(request);
+    if (!token) return null;
+
+    return validateSessionFn(
+      {
+        db: this.db,
+        secret: this.secret,
+        strategy: this.sessionConfig.strategy,
+        maxAge: this.sessionConfig.maxAge,
+        sessionsTable: this.sessionsTable,
+        usersTable: this.usersTable,
+      },
+      token,
+    );
   }
 
-  verifyPassword(password: string, stored: string): boolean {
-    return scryptVerify(password, stored);
+  async logout(token: string): Promise<void> {
+    const session = await validateSessionFn(
+      {
+        db: this.db,
+        secret: this.secret,
+        strategy: this.sessionConfig.strategy,
+        maxAge: this.sessionConfig.maxAge,
+        sessionsTable: this.sessionsTable,
+        usersTable: this.usersTable,
+      },
+      token,
+    );
+
+    if (session) {
+      await this.callbacks?.onLogout?.(session);
+    }
+
+    await revokeSessionFn(
+      {
+        db: this.db,
+        secret: this.secret,
+        strategy: this.sessionConfig.strategy,
+        maxAge: this.sessionConfig.maxAge,
+        sessionsTable: this.sessionsTable,
+        usersTable: this.usersTable,
+      },
+      token,
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 2FA
+  // ---------------------------------------------------------------------------
+
+  twoFactor = {
+    generate: async (userId: string) => {
+      const secret = generateSecret();
+      const otpauthUrl = generateURI(secret, userId, 'MountSQLi');
+
+      await this.db.query(this.usersTable)
+        .where('id', '=', userId)
+        .update({ twoFactorSecret: secret });
+
+      return { secret, otpauthUrl };
+    },
+
+    enable: async (userId: string, code: string) => {
+      const user = await this.db.query(this.usersTable)
+        .where('id', '=', userId)
+        .findOne();
+
+      if (!user?.twoFactorSecret) {
+        throw new UserNotFoundError();
+      }
+
+      if (!verifyCode(user.twoFactorSecret, code)) {
+        throw new TwoFactorInvalidError();
+      }
+
+      await this.db.query(this.usersTable)
+        .where('id', '=', userId)
+        .update({ twoFactorEnabled: true });
+    },
+
+    disable: async (userId: string) => {
+      await this.db.query(this.usersTable)
+        .where('id', '=', userId)
+        .update({ twoFactorEnabled: false, twoFactorSecret: null });
+    },
+
+    verify: (secret: string, code: string): boolean => {
+      return verifyCode(secret, code);
+    },
+  };
+
+  // ---------------------------------------------------------------------------
+  // Password Reset
+  // ---------------------------------------------------------------------------
+
+  passwordReset = {
+    create: async (email: string): Promise<string> => {
+      const user = await this.db.query(this.usersTable)
+        .where('email', '=', email)
+        .findOne();
+
+      if (!user) {
+        return 'If an account exists, a reset email has been sent.';
+      }
+
+      const token = generateSecret(32);
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+      await this.db.query(this.verificationTable).insert({
+        identifier: email,
+        token,
+        expiresAt,
+      });
+
+      await sendPasswordResetEmail(this.emailAdapter, email, token);
+
+      return 'If an account exists, a reset email has been sent.';
+    },
+
+    verify: async (token: string, newPassword: string): Promise<void> => {
+      const verification = await this.db.query(this.verificationTable)
+        .where('token', '=', token)
+        .findOne();
+
+      if (!verification || verification.expiresAt < new Date()) {
+        throw new UnauthorizedError('Invalid or expired reset token');
+      }
+
+      const hashedPassword = await hashPassword(newPassword);
+
+      await this.db.query(this.usersTable)
+        .where('email', '=', verification.identifier)
+        .update({ password: hashedPassword, updatedAt: new Date() });
+
+      // Delete the token
+      await this.db.query(this.verificationTable)
+        .where('token', '=', token)
+        .delete();
+
+      // Revoke all sessions
+      const user = await this.db.query(this.usersTable)
+        .where('email', '=', verification.identifier)
+        .findOne();
+
+      await revokeAllSessionsFn(
+        {
+          db: this.db,
+          secret: this.secret,
+          strategy: this.sessionConfig.strategy,
+          maxAge: this.sessionConfig.maxAge,
+          sessionsTable: this.sessionsTable,
+          usersTable: this.usersTable,
+        },
+        user?.id ?? '',
+      );
+    },
+  };
+
+  // ---------------------------------------------------------------------------
+  // Email Verification
+  // ---------------------------------------------------------------------------
+
+  emailVerification = {
+    create: async (userId: string): Promise<string> => {
+      const user = await this.db.query(this.usersTable)
+        .where('id', '=', userId)
+        .findOne();
+
+      if (!user) throw new UserNotFoundError();
+
+      const token = generateSecret(32);
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+      await this.db.query(this.verificationTable).insert({
+        identifier: user.email,
+        token,
+        expiresAt,
+      });
+
+      await sendVerificationEmail(this.emailAdapter, user.email, token);
+
+      return token;
+    },
+
+    verify: async (token: string): Promise<void> => {
+      const verification = await this.db.query(this.verificationTable)
+        .where('token', '=', token)
+        .findOne();
+
+      if (!verification || verification.expiresAt < new Date()) {
+        throw new UnauthorizedError('Invalid or expired verification token');
+      }
+
+      await this.db.query(this.usersTable)
+        .where('email', '=', verification.identifier)
+        .update({ emailVerified: new Date() });
+
+      await this.db.query(this.verificationTable)
+        .where('token', '=', token)
+        .delete();
+    },
+  };
+
+  // ---------------------------------------------------------------------------
+  // RBAC
+  // ---------------------------------------------------------------------------
+
+  rbac = {
+    createRole: (data: { name: string; permissions: string[] }) =>
+      createRoleFn({ db: this.db, rolesTable: this.rolesTable, userRolesTable: this.userRolesTable }, data),
+
+    deleteRole: (roleId: string) =>
+      deleteRoleFn({ db: this.db, rolesTable: this.rolesTable, userRolesTable: this.userRolesTable }, roleId),
+
+    assignRole: (userId: string, roleName: string) =>
+      assignRoleFn({ db: this.db, rolesTable: this.rolesTable, userRolesTable: this.userRolesTable }, userId, roleName),
+
+    removeRole: (userId: string, roleName: string) =>
+      removeRoleFn({ db: this.db, rolesTable: this.rolesTable, userRolesTable: this.userRolesTable }, userId, roleName),
+
+    getUserRoles: (userId: string): Promise<Role[]> =>
+      getUserRolesFn({ db: this.db, rolesTable: this.rolesTable, userRolesTable: this.userRolesTable }, userId),
+
+    hasRole: (userId: string, roleName: string): Promise<boolean> =>
+      hasRoleFn({ db: this.db, rolesTable: this.rolesTable, userRolesTable: this.userRolesTable }, userId, roleName),
+
+    authorize: (userId: string, permission: string): Promise<boolean> =>
+      hasPermissionFn({ db: this.db, rolesTable: this.rolesTable, userRolesTable: this.userRolesTable }, userId, permission),
+  };
+
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
+
+  private isValidEmail(email: string): boolean {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 254;
+  }
+
+  private isValidPassword(password: string): { valid: boolean; errors: string[] } {
+    const errors: string[] = [];
+    if (password.length < 8) errors.push('Password must be at least 8 characters');
+    if (password.length > 128) errors.push('Password must be at most 128 characters');
+    if (!/[A-Z]/.test(password)) errors.push('Password must contain an uppercase letter');
+    if (!/[a-z]/.test(password)) errors.push('Password must contain a lowercase letter');
+    if (!/[0-9]/.test(password)) errors.push('Password must contain a number');
+    return { valid: errors.length === 0, errors };
+  }
+
+  /** Generate a CSRF token for a session */
+  generateCsrfToken(sessionToken: string): string {
+    return createHmac('sha256', this.secret).update(sessionToken).digest('hex');
+  }
+
+  /** Validate a CSRF token */
+  validateCsrfToken(sessionToken: string, csrfToken: string): boolean {
+    const expected = this.generateCsrfToken(sessionToken);
+    const expectedBuf = Buffer.from(expected);
+    const inputBuf = Buffer.from(csrfToken);
+    if (expectedBuf.length !== inputBuf.length) return false;
+    const { timingSafeEqual } = require('node:crypto');
+    return timingSafeEqual(expectedBuf, inputBuf);
+  }
+
+  private extractToken(request: { headers?: Record<string, string | undefined> }): string | null {
+    const authHeader = request.headers?.authorization;
+    if (authHeader?.startsWith('Bearer ')) {
+      return authHeader.slice(7);
+    }
+
+    // Also check cookie
+    const cookieHeader = request.headers?.cookie;
+    if (cookieHeader) {
+      const match = cookieHeader.match(/auth-token=([^;]+)/);
+      if (match) return match[1] ?? null;
+    }
+
+    return null;
+  }
+
+  private sanitizeUser(user: any): User {
+    return {
+      id: user.id,
+      email: user.email,
+      emailVerified: user.emailVerified,
+      name: user.name,
+      image: user.image,
+      twoFactorEnabled: user.twoFactorEnabled,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
   }
 }
-
-// Factory for creating auth instance
-export function createAuth(config: AuthConfig): MountAuth {
-  return new MountAuth(config);
-}
-
-// Export types
-export type { AuthConfig, Provider, User, Session, Account, Adapter, Callbacks, Events, User as AdapterUser } from "../types/index.js";
-export { createPgAdapter } from "../adapters/pg.js";

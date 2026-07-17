@@ -1,93 +1,57 @@
 ---
 title: Rate Limiting
-description: Opt-in brute-force protection for the login path with MemoryRateLimiter and injectable limiters.
+description: Built-in brute-force protection — the Auth class limits failed login attempts automatically.
 ---
-import { Aside } from '@astrojs/starlight/components';
 
+The `Auth` class includes an `InMemoryRateLimiter` that limits failed login
+attempts. It is enabled by default at **5 attempts per minute per email key**.
 
-MountSQLI ships an opt-in rate limiter for the login path. Failed attempts per
-key (username / IP) lock out after a threshold.
+## How it works
 
-## Enable on the facade
-
-```ts
-import { Auth } from "@mountsqli/auth";
-
-const auth = new Auth({
-  jwtKey: "secret",
-  rateLimit: { windowSec: 60, maxAttempts: 5, lockoutSec: 300 },
-});
-```
-
-## Use the facade wrappers
+When a `login()` call via the `credentials` provider fails (wrong password or
+user not found), the rate limiter counts the failure for that email. After 5
+failures within a minute, the key is locked out and `login()` throws
+`UnauthorizedError`.
 
 ```ts
-const key = `${username}:${ip}`;
-
-if (auth.isLockedOut(key)) {
-  return res.status(429).json({ error: "Locked out" });
-}
-
-const user = await verifyLogin(username, password);
-if (!user) {
-  auth.recordLoginFailure(key); // counts toward lockout
-  return res.status(401).json({ error: "Invalid" });
-}
-auth.clearLoginFailures(key); // success resets the counter
-```
-
-## Enable on MountAuth (automatic)
-
-`MountAuth.signIn` applies the limiter automatically when `rateLimit` is set:
-
-```ts
-const auth = createAuth({
-  jwt: { secret: "..." },
-  rateLimit: { windowSec: 60, maxAttempts: 5, lockoutSec: 300 },
-  providers: [/* ... */],
-});
-// signIn() checks isLocked, records on failure, resets on success
-```
-
-## Inject a shared limiter
-
-For multi-instance deploys, inject a `RateLimiter` (e.g. Redis-backed). It takes
-precedence over `rateLimit`:
-
-```ts
-const auth = new Auth({
-  jwtKey: "secret",
-  rateLimiter: new RedisRateLimiter(), // implements { isLocked, recordFailure, reset }
-});
-```
-
-The `RateLimiter` interface is:
-
-```ts
-interface RateLimiter {
-  isLocked(key: string): boolean;
-  recordFailure(key: string): void;
-  reset(key: string): void;
+try {
+  const result = await auth.login("credentials", { email, password });
+} catch (e) {
+  if (e instanceof UnauthorizedError) {
+    // rate limit hit or invalid credentials
+  }
 }
 ```
 
-<Aside type="note" title="In-memory is per-process">
-`MemoryRateLimiter` resets on restart and isn't shared across instances. For
-multi-instance, back it with a shared store (Redis) via `rateLimiter`.
-</Aside>
+Success resets the counter.
+
+## Configuration
+
+The rate limiter is not currently configurable via `AuthConfig`. It is set to:
+
+- **Window:** 60 seconds
+- **Max attempts:** 5 per key
+- **Key:** `login:${email}`
+
+## For multi-instance deployments
+
+The built-in `InMemoryRateLimiter` is per-process. In a multi-instance setup,
+rate limit state is not shared across instances. For production, you can wrap
+the `Auth.register` / `loginWithCredentials` path with your own shared rate
+limiter (Redis, etc.) before calling `auth.login()`.
 
 ## Best practices
 
-- Key by a stable identity (`username:ip`), not just IP.
-- Short window (60s) + meaningful lockout (5 min) for login.
-- Clear failures on success so legitimate users aren't penalized.
+- The built-in limiter is sufficient for single-process apps and development.
+- For production multi-instance, add a Redis-backed limiter in front of `login`.
+- Key on email (not IP) to avoid shared-IP lockouts.
 
 ## Common mistakes
 
-- Using only IP as the key — easy to lock out shared IPs.
-- Forgetting to `reset` on success — users get locked out repeatedly.
+- Assuming the rate limiter spans multiple server processes (it doesn't).
+- Not handling `UnauthorizedError` from `login()` — the rate limit is a real auth error.
 
 ## Related
 
-- [Sessions](/auth/sessions/) — the `Auth` facade.
-- [OAuth & Providers](/auth/oauth/) — `MountAuth.signIn` wiring.
+- [OAuth & Providers](/auth/oauth/) — credentials provider.
+- [Sessions](/auth/sessions/) — what happens after successful login.

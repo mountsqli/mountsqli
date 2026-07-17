@@ -1,6 +1,6 @@
 {
   "name": "@mountsqli/core",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "type": "module",
   "description": "MountSQLI core umbrella: schema, typed query builder, sqlite driver",
   "main": "./dist/index.js",

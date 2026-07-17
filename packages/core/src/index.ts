@@ -10,7 +10,7 @@ import type { SqlQuery } from "@mountsqli/query";
 import type { Compiled } from "@mountsqli/driver";
 import { NodeSqliteDriver } from "@mountsqli/driver-sqlite";
 import type { Table } from "@mountsqli/schema";
-import { loadMountConfig, loadMountConfigWithFile, resolveConfigUrl } from "./config";
+import { loadMountConfig, loadMountConfigWithFile, resolveConfigUrl } from "./config.js";
 import { CacheManager, CacheBridge } from "@mountsqli/cache";
 
 export interface MountConfig {
@@ -385,4 +385,4 @@ export type { QueryPlan, Comparator, FilterNode, Compiled, WindowDef, OnConflict
 export { registerDriver, createDriver, listDrivers, MockDriver } from "@mountsqli/driver";
 export type { Driver, Transaction, QueryResult, ExecuteMode, MockRecording } from "@mountsqli/driver";
 export { NodeSqliteDriver, resolveSqliteUrl } from "@mountsqli/driver-sqlite";
-export { defineConfig, loadMountConfig, loadMountConfigWithFile, resolveConfigUrl, findMountConfig, collectSchema, CONFIG_NAMES } from "./config";
+export { defineConfig, loadMountConfig, loadMountConfigWithFile, resolveConfigUrl, findMountConfig, collectSchema, CONFIG_NAMES } from "./config.js";
